@@ -153,6 +153,22 @@ export async function deleteSession(id) {
     const target = sessions.find(s => s._id === id)
     if (target) await deleteSessionMediaFiles(target)
     const filtered = sessions.filter(s => s._id !== id)
+
+    const targetDateKey = target?.createdAt
+      ? (target.createdAt.split('T')[0])
+      : null
+
+    if (targetDateKey) {
+      const hasOtherSessionsOnSameDay = filtered.some(s =>
+        s.createdAt && s.createdAt.split('T')[0] === targetDateKey
+      )
+      if (!hasOtherSessionsOnSameDay) {
+        const streak = await getStreak()
+        delete streak[targetDateKey]
+        await setStreak(streak)
+      }
+    }
+
     await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(filtered))
   } catch {
     // ignore
@@ -194,10 +210,59 @@ export async function setStreak(streak) {
   }
 }
 
-export async function markDayComplete(day) {
+export async function getAllMedia() {
+  try {
+    const sessions = await getSessions()
+    const allMedia = []
+    for (const session of sessions) {
+      if (session.exercises) {
+        for (let ei = 0; ei < session.exercises.length; ei++) {
+          const ex = session.exercises[ei]
+          if (ex.media && Array.isArray(ex.media)) {
+            for (let mi = 0; mi < ex.media.length; mi++) {
+              allMedia.push({
+                ...ex.media[mi],
+                sessionId: session._id,
+                exerciseIndex: ei,
+                mediaIndex: mi,
+                exerciseName: ex.name,
+                sessionName: session.name,
+                sessionDate: session.date,
+              })
+            }
+          }
+        }
+      }
+    }
+    allMedia.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    return allMedia
+  } catch {
+    return []
+  }
+}
+
+export async function deleteMediaItem(sessionId, exerciseIndex, mediaIndex) {
+  try {
+    const sessions = await getSessions()
+    const sessionIdx = sessions.findIndex(s => s._id === sessionId)
+    if (sessionIdx === -1) return false
+    const session = sessions[sessionIdx]
+    const mediaArr = session.exercises?.[exerciseIndex]?.media
+    if (!mediaArr || !mediaArr[mediaIndex]) return false
+    deleteMediaFile(mediaArr[mediaIndex].uri)
+    mediaArr.splice(mediaIndex, 1)
+    await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function markDayComplete(date) {
   try {
     const streak = await getStreak()
-    streak[day] = true
+    const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
+    streak[key] = true
     await setStreak(streak)
   } catch {
     // ignore

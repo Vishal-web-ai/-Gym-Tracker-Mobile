@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react'
-import { View, Text, Image, TouchableOpacity, Modal, Dimensions } from 'react-native'
+import { View, Text, Image, TouchableOpacity, Modal } from 'react-native'
 import { Video, ResizeMode } from 'expo-av'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react-native'
+import DeleteConfirmModal from './DeleteConfirmModal'
+import { scale, fontScale } from '../utils/responsive'
 
-const { width, height } = Dimensions.get('window')
-
-export default function MediaViewer({ items, initialIndex = 0, onClose }) {
+export default function MediaViewer({ items, initialIndex = 0, onClose, onDeleteItem }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const videoRefs = useRef({})
 
   const current = items[currentIndex]
@@ -25,12 +26,19 @@ export default function MediaViewer({ items, initialIndex = 0, onClose }) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 bg-black">
-        <View className="flex-row justify-between items-center px-4 pt-12 pb-2">
-          <Text className="text-white text-sm">
-            {currentIndex + 1} / {items.length}
-          </Text>
-          <TouchableOpacity onPress={onClose} className="p-2">
-            <X size={24} color="white" />
+        <View className="flex-row justify-between items-center" style={{ paddingHorizontal: scale(16), paddingTop: scale(48), paddingBottom: scale(8) }}>
+          <View className="flex-row items-center" style={{ gap: scale(12) }}>
+            <Text className="text-white" style={{ fontSize: fontScale(14) }}>
+              {currentIndex + 1} / {items.length}
+            </Text>
+            {onDeleteItem && (
+              <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={{ padding: scale(4) }}>
+                <Trash2 size={scale(18)} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity onPress={onClose} style={{ padding: scale(8) }}>
+            <X size={scale(24)} color="white" />
           </TouchableOpacity>
         </View>
 
@@ -39,7 +47,7 @@ export default function MediaViewer({ items, initialIndex = 0, onClose }) {
             <Video
               ref={ref => { if (ref) videoRefs.current[current.id] = ref }}
               source={{ uri: current.uri }}
-              style={{ width, height: height * 0.6 }}
+              style={{ width: scale(390), height: scale(506) }}
               resizeMode={ResizeMode.CONTAIN}
               useNativeControls
               shouldPlay
@@ -48,27 +56,29 @@ export default function MediaViewer({ items, initialIndex = 0, onClose }) {
           ) : (
             <Image
               source={{ uri: current.uri }}
-              style={{ width, height: height * 0.6 }}
+              style={{ width: scale(390), height: scale(506) }}
               resizeMode="contain"
             />
           )}
         </View>
 
         {items.length > 1 && (
-          <View className="flex-row justify-center items-center gap-6 pb-8">
+          <View className="flex-row justify-center items-center" style={{ gap: scale(24), paddingBottom: scale(32) }}>
             <TouchableOpacity
               onPress={handlePrev}
               disabled={currentIndex === 0}
-              className={`p-3 rounded-full ${currentIndex === 0 ? 'opacity-30' : 'bg-orange-500/20'}`}
+              className={`rounded-full ${currentIndex === 0 ? 'opacity-30' : 'bg-orange-500/20'}`}
+              style={{ padding: scale(12) }}
             >
-              <ChevronLeft size={28} color="white" />
+              <ChevronLeft size={scale(28)} color="white" />
             </TouchableOpacity>
 
-            <View className="flex-row gap-2">
+            <View className="flex-row" style={{ gap: scale(8) }}>
               {items.map((_, i) => (
                 <View
                   key={i}
-                  className={`w-2 h-2 rounded-full ${i === currentIndex ? 'bg-orange-500' : 'bg-white/30'}`}
+                  className={`rounded-full ${i === currentIndex ? 'bg-orange-500' : 'bg-white/30'}`}
+                  style={{ width: scale(8), height: scale(8) }}
                 />
               ))}
             </View>
@@ -76,13 +86,23 @@ export default function MediaViewer({ items, initialIndex = 0, onClose }) {
             <TouchableOpacity
               onPress={handleNext}
               disabled={currentIndex === items.length - 1}
-              className={`p-3 rounded-full ${currentIndex === items.length - 1 ? 'opacity-30' : 'bg-orange-500/20'}`}
+              className={`rounded-full ${currentIndex === items.length - 1 ? 'opacity-30' : 'bg-orange-500/20'}`}
+              style={{ padding: scale(12) }}
             >
-              <ChevronRight size={28} color="white" />
+              <ChevronRight size={scale(28)} color="white" />
             </TouchableOpacity>
           </View>
         )}
       </View>
+
+      <DeleteConfirmModal
+        visible={showDeleteModal}
+        onCancel={() => setShowDeleteModal(false)}
+        onDelete={() => {
+          setShowDeleteModal(false)
+          onDeleteItem(currentIndex)
+        }}
+      />
     </Modal>
   )
 }

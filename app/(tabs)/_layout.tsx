@@ -1,12 +1,12 @@
-import { useState, useRef, useCallback, createContext, useContext } from 'react'
-import { Pressable } from 'react-native'
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react'
+import { Pressable, View, Image } from 'react-native'
 import { Tabs, usePathname } from 'expo-router'
 import { Dumbbell, Clock, User } from 'lucide-react-native'
 import CircularReveal from '../../src/components/CircularReveal'
+import { scale } from '../../src/utils/responsive'
+import { getUserProfile } from '../../src/storage'
 
 const RevealContext = createContext(null)
-
-const TAB_ROUTES = { '/': 'Home', '/history': 'History', '/profile': 'Profile' }
 
 function TabButton({ children, onPress, tabName, ...rest }) {
   const ref = useRef(null)
@@ -40,8 +40,18 @@ function TabButton({ children, onPress, tabName, ...rest }) {
 
 export default function TabLayout() {
   const [reveal, setReveal] = useState(null)
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null)
   const pendingNavRef = useRef(null)
   const revealKeyRef = useRef(0)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    getUserProfile().then(profile => {
+      if (profile.photoUri) {
+        setProfilePhotoUri(profile.photoUri)
+      }
+    })
+  }, [pathname])
 
   const trigger = useCallback((payload) => {
     pendingNavRef.current = payload.navigate
@@ -65,13 +75,13 @@ export default function TabLayout() {
             backgroundColor: '#1f1f1f',
             borderTopColor: '#333',
             borderTopWidth: 1,
-            height: 60,
-            paddingBottom: 8,
-            paddingTop: 4,
+            height: scale(60),
+            paddingBottom: scale(8),
+            paddingTop: scale(4),
           },
           tabBarActiveTintColor: '#f97316',
           tabBarInactiveTintColor: '#666',
-          tabBarLabelStyle: { fontFamily: 'monospace', fontSize: 11 },
+          tabBarLabelStyle: { fontFamily: 'monospace', fontSize: scale(11) },
           tabBarButton: (props) => <Pressable {...props} />,
         }}
       >
@@ -95,7 +105,16 @@ export default function TabLayout() {
           name="profile"
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+            tabBarIcon: ({ color }) =>
+              profilePhotoUri ? (
+                <View className="rounded-full border-2 border-orange-500 overflow-hidden" style={{ width: scale(34), height: scale(34) }}>
+                  <Image source={{ uri: profilePhotoUri }} className="w-full h-full" resizeMode="cover" />
+                </View>
+              ) : (
+                <View className="rounded-full border-2 border-orange-500 items-center justify-center" style={{ width: scale(34), height: scale(34) }}>
+                  <User color={color} size={scale(20)} />
+                </View>
+              ),
             tabBarButton: (props) => <TabButton tabName="profile" {...props} />,
           }}
         />

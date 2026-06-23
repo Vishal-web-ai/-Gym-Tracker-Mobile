@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator } from 'react-native'
 import { useFonts } from 'expo-font'
 import { Inter_100Thin, Inter_200ExtraLight, Inter_300Light, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, Inter_900Black } from '@expo-google-fonts/inter'
 import { EduNSWACTCursive_400Regular, EduNSWACTCursive_500Medium, EduNSWACTCursive_600SemiBold, EduNSWACTCursive_700Bold } from '@expo-google-fonts/edu-nsw-act-cursive'
@@ -28,11 +28,12 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#050505' }}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#050505' } }}>
+        <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
     </GestureHandlerRootView>
   )

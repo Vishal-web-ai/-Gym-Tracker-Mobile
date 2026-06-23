@@ -1,34 +1,27 @@
-import { useEffect, useRef } from 'react'
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, withDelay, Easing } from 'react-native-reanimated'
+import { useEffect } from 'react'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated'
 
-const STAGGER_DELAY = 100
-const ANIMATION_DURATION = 400
-const INITIAL_TRANSLATE_Y = 30
+const STAGGER_DELAY = 80
+const ANIMATION_DURATION = 350
+const INITIAL_TRANSLATE_Y = 25
 const INITIAL_TRANSLATE_X = 300
-const INITIAL_SCALE = 0.95
+const INITIAL_SCALE = 0.92
 
 const easing = Easing.bezier(0.16, 1, 0.3, 1)
 
-let appLaunched = false
-
 export default function AnimatedStaggerCard({ index = 0, direction = 'up', children, className, style = undefined }) {
-  const opacity = useSharedValue(appLaunched ? 1 : 0)
-  const translateY = useSharedValue(appLaunched ? 0 : INITIAL_TRANSLATE_Y)
-  const translateX = useSharedValue(appLaunched ? 0 : INITIAL_TRANSLATE_X)
-  const scale = useSharedValue(appLaunched ? 1 : INITIAL_SCALE)
-  const didAnimate = useRef(appLaunched)
+  const opacity = useSharedValue(0)
+  const translateY = useSharedValue(INITIAL_TRANSLATE_Y)
+  const translateX = useSharedValue(INITIAL_TRANSLATE_X)
+  const scale = useSharedValue(INITIAL_SCALE)
 
   useEffect(() => {
-    if (didAnimate.current) return
-    didAnimate.current = true
-    appLaunched = true
-
     const delay = index * STAGGER_DELAY
 
     opacity.value = withDelay(delay, withTiming(1, { duration: ANIMATION_DURATION, easing }))
     translateY.value = withDelay(delay, withTiming(0, { duration: ANIMATION_DURATION, easing }))
     translateX.value = withDelay(delay, withTiming(0, { duration: ANIMATION_DURATION, easing }))
-    scale.value = withDelay(delay, withTiming(1, { duration: ANIMATION_DURATION, easing }))
+    scale.value = withDelay(delay, withSpring(1, { damping: 12, stiffness: 150 }))
   }, [])
 
   const animatedStyle = useAnimatedStyle(() => ({

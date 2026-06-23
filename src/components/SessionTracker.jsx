@@ -1,67 +1,157 @@
-import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native'
+import { useState, useEffect, useRef, memo } from 'react'
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Alert, Animated } from 'react-native'
+import { Swipeable } from 'react-native-gesture-handler'
 import { Camera, Video, FileEdit } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import NumberOfSets from './NumberOfSets'
 import AnimatedStaggerCard from './AnimatedStaggerCard'
 import MediaViewer from './MediaViewer'
 import { saveSession, copyToMediaDir } from '../storage'
+import { scale, fontScale } from '../utils/responsive'
 
-export default function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, exerciseWeights, exerciseSets, exerciseNotes, setWeight, setReps, setNotes }) {
+function WeightCell({ value, onChangeText }) {
+  return (
+    <TextInput
+      className="bg-neutral-800 border border-orange-500/50 text-white rounded-lg text-center"
+      style={{ width: scale(38), height: scale(30), color: '#FFFFFF', paddingVertical: 0, fontSize: fontScale(14) }}
+      value={String(value ?? '')}
+      onChangeText={(val) => onChangeText(val)}
+      placeholder="0"
+      placeholderTextColor="#f97316"
+      keyboardType="numeric"
+    />
+  )
+}
+
+function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, exerciseWeights, exerciseSets, exerciseNotes, exerciseMedia, setExerciseMedia, setWeight, setReps, setNotes }) {
   const [showNameModal, setShowNameModal] = useState(false)
   const [workoutName, setWorkoutName] = useState('')
+  const popScale = useRef(new Animated.Value(0)).current
+  const popOpacity = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (showNameModal) {
+      Animated.parallel([
+        Animated.spring(popScale, {
+          toValue: 1,
+          damping: 10,
+          stiffness: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(popOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      popScale.setValue(0)
+      popOpacity.setValue(0)
+    }
+  }, [showNameModal])
   const [showNotes, setShowNotes] = useState({})
-  const [exerciseMedia, setExerciseMedia] = useState({})
   const [mediaViewer, setMediaViewer] = useState({ open: false, items: [], index: 0 })
+  const [captureModal, setCaptureModal] = useState({ visible: false, exerciseIdx: null, type: null })
+  const [timers, setTimers] = useState({})
+  const timerIntervals = useRef({})
+  const timerLastClick = useRef({})
 
-  const handleCapture = async (exerciseIdx, type) => {
-    const options = type === 'photo'
-      ? ['Take Photo', 'Choose from Gallery', 'Cancel']
-      : ['Record Video', 'Choose from Gallery', 'Cancel']
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
 
-    Alert.alert(
-      type === 'photo' ? 'Add Photo' : 'Add Video',
-      null,
-      [
-        {
-          text: options[0],
-          onPress: async () => {
-            const perm = await ImagePicker.requestCameraPermissionsAsync()
-            if (!perm.granted) {
-              Alert.alert('Permission needed', 'Camera access is required to take photos.')
-              return
-            }
-            const result = type === 'photo'
-              ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 })
-              : await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], videoMaxDuration: 60, quality: 0.7 })
+  const getTimer = (idx) => timers[idx] || { elapsed: 0, running: false, paused: false }
 
-            if (!result.canceled && result.assets?.[0]) {
-              const uri = await copyToMediaDir(result.assets[0].uri, type)
-              addMedia(exerciseIdx, type, uri)
-            }
-          }
-        },
-        {
-          text: options[1],
-          onPress: async () => {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-            if (!perm.granted) {
-              Alert.alert('Permission needed', 'Gallery access is required to choose media.')
-              return
-            }
-            const result = type === 'photo'
-              ? await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 })
-              : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 0.7 })
+  useEffect(() => {
+    const ids = timerIntervals.current
+    Object.keys(timers).forEach(idx => {
+      const t = timers[idx]
+      if (t.running && !t.paused) {
+        if (!ids[idx]) {
+          ids[idx] = setInterval(() => {
+            setTimers(prev => {
+              const cur = prev[idx]
+              if (!cur || !cur.running || cur.paused) return prev
+              return { ...prev, [idx]: { ...cur, elapsed: cur.elapsed + 1 } }
+            })
+          }, 1000)
+        }
+      } else if (ids[idx]) {
+        clearInterval(ids[idx])
+        delete ids[idx]
+      }
+    })
+  }, [timers])
 
-            if (!result.canceled && result.assets?.[0]) {
-              const uri = await copyToMediaDir(result.assets[0].uri, type)
-              addMedia(exerciseIdx, type, uri)
-            }
-          }
-        },
-        { text: options[2], style: 'cancel' }
-      ]
-    )
+  useEffect(() => {
+    return () => { Object.values(timerIntervals.current).forEach(clearInterval) }
+  }, [])
+
+  const handleTimerClick = (idx) => {
+    const now = Date.now()
+    const lastClick = timerLastClick.current[idx] || 0
+    timerLastClick.current[idx] = now
+    const isDoubleClick = now - lastClick < 300
+
+    if (isDoubleClick) {
+      if (timerIntervals.current[idx]) clearInterval(timerIntervals.current[idx])
+      delete timerIntervals.current[idx]
+      setTimers(prev => ({ ...prev, [idx]: { elapsed: 0, running: false, paused: false } }))
+      return
+    }
+
+    const t = getTimer(idx)
+    if (t.running && !t.paused) {
+      if (timerIntervals.current[idx]) clearInterval(timerIntervals.current[idx])
+      delete timerIntervals.current[idx]
+      setTimers(prev => ({ ...prev, [idx]: { ...(prev[idx] || { elapsed: 0 }), running: true, paused: true } }))
+    } else if (t.paused) {
+      setTimers(prev => ({ ...prev, [idx]: { ...(prev[idx] || { elapsed: 0 }), running: true, paused: false } }))
+    } else {
+      setTimers(prev => ({ ...prev, [idx]: { elapsed: 0, running: true, paused: false } }))
+    }
+  }
+
+  const handleCapturePress = (exerciseIdx, type) => {
+    setCaptureModal({ visible: true, exerciseIdx, type })
+  }
+
+  const handleCaptureAction = async (action) => {
+    const { exerciseIdx, type } = captureModal
+    setCaptureModal({ visible: false, exerciseIdx: null, type: null })
+
+    if (action === 'cancel') return
+
+    const isCamera = action === 'camera'
+
+    if (isCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Camera access is required.')
+        return
+      }
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Gallery access is required.')
+        return
+      }
+    }
+
+    const result = isCamera
+      ? type === 'photo'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 })
+        : await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], videoMaxDuration: 60, quality: 0.7 })
+      : type === 'photo'
+        ? await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 0.7 })
+
+    if (!result.canceled && result.assets?.[0]) {
+      const uri = await copyToMediaDir(result.assets[0].uri, type)
+      addMedia(exerciseIdx, type, uri)
+    }
   }
 
   const addMedia = (exerciseIdx, type, uri) => {
@@ -112,36 +202,47 @@ export default function SessionTracker({ exercises, onRemove, onAddExercises, on
 
   return (
     <View className="flex-1 w-full">
-      <View className="px-5 pt-5 pb-3">
-        <TouchableOpacity onPress={onAddExercises} className="border border-orange-500 rounded-xl py-3 mt-10">
-          <Text className="text-orange-500 text-3xl text-center font-bold">Add Exercises</Text>
+      <View style={{ paddingHorizontal: scale(20), paddingTop: scale(20), paddingBottom: scale(12) }}>
+        <TouchableOpacity onPress={onAddExercises} className="border border-orange-500 rounded-xl" style={{ paddingVertical: scale(12), marginTop: scale(40) }}>
+          <Text className="text-orange-500 text-center font-bebas" style={{ fontSize: fontScale(30) }}>Add Exercises</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" style={{ paddingHorizontal: scale(20) }} showsVerticalScrollIndicator={false}>
         {exercises.length > 0 ? (
           exercises.map((exercise, idx) => (
-            <AnimatedStaggerCard key={idx} index={idx} className="flex-col gap-0 bg-orange-500/10 border border-neutral-500 p-3 rounded-lg mb-3">
-              <View className="flex-row justify-between items-center">
-                <Text className="text-orange-400 text-sm flex-1">{exercise.name}</Text>
-                <View className="flex-row items-center gap-1">
-                  <TouchableOpacity onPress={() => handleCapture(idx, 'photo')} className="p-1">
-                    <Camera size={16} color="white" />
+            <Swipeable key={idx} renderRightActions={(progress, dragX) => {
+              const translateX = dragX.interpolate({
+                inputRange: [-80, 0],
+                outputRange: [0, 80],
+                extrapolate: 'clamp',
+              })
+              return (
+                <Animated.View style={{ transform: [{ translateX }] }} className="justify-center items-end mr-3">
+                  <View className="bg-red-500/90 rounded-lg h-full justify-center" style={{ paddingHorizontal: scale(20) }}>
+                    <Text className="text-white font-bebas" style={{ fontSize: fontScale(18) }}>Delete</Text>
+                  </View>
+                </Animated.View>
+              )
+            }} onSwipeableWillOpen={() => onRemove(idx)} rightThreshold={80} containerStyle={{ marginBottom: 12 }}>
+              <AnimatedStaggerCard index={idx} className="flex-col gap-0 bg-orange-500/10 border border-orange-500/50 rounded-lg relative" style={{ padding: scale(12) }}>
+              <View className="flex-row items-center">
+                <Text className="text-orange-400 font-bebas pb-1 flex-1 mr-2" style={{ fontSize: fontScale(24) }} numberOfLines={1}>{exercise.name}</Text>
+                <View className="flex-row items-center border border-orange-500/40 rounded-lg mb-2 flex-shrink-0" style={{ paddingHorizontal: scale(8), paddingVertical: scale(4), gap: scale(12) }}>
+                  <TouchableOpacity onPress={() => handleCapturePress(idx, 'photo')}>
+                    <Camera size={scale(20)} color="white" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleCapture(idx, 'video')} className="p-1">
-                    <Video size={16} color="white" />
+                  <TouchableOpacity onPress={() => handleCapturePress(idx, 'video')}>
+                    <Video size={scale(20)} color="white" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setShowNotes(prev => ({ ...prev, [idx]: !prev[idx] }))} className="p-1">
-                    <FileEdit size={16} color="white" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => onRemove(idx)} className="px-2 py-1">
-                    <Text className="text-red-500">X</Text>
+                  <TouchableOpacity onPress={() => setShowNotes(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                    <FileEdit size={scale(17)} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
               <View className="flex-row items-center relative">
-                <Text className="text-orange-500/60 text-xs w-12">Sets</Text>
-                <View className="flex-row flex-1 gap-3 pl-3">
+                <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Sets</Text>
+                <View className="flex-row flex-1" style={{ gap: scale(12) }}>
                   {[0, 1, 2].map(setIdx => {
                     const mode = exercise.mode || 'weight'
                     return (
@@ -156,39 +257,37 @@ export default function SessionTracker({ exercises, onRemove, onAddExercises, on
                     )
                   })}
                 </View>
-                {exerciseMedia[idx]?.length > 0 && (
-                  <View className="absolute top-full right-0 -mt-6 items-center">
-                    <TouchableOpacity
-                      onPress={() => setMediaViewer({ open: true, items: exerciseMedia[idx], index: 0 })}
-                      className="w-16 h-12 items-center justify-center border border-orange-500/40 bg-orange-500/20 rounded-lg"
-                    >
-                      <Text className="text-orange-400 text-[10px] font-bold px-1">Media({exerciseMedia[idx].length})</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setExerciseMedia(prev => ({ ...prev, [idx]: [] }))}>
-                      <Text className="text-red-500 text-[10px] mt-0.5">Clear</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <TouchableOpacity onPress={() => handleTimerClick(idx)} className="border border-orange-500/40 bg-orange-500/20 rounded mr-2" style={{ paddingHorizontal: scale(12), paddingVertical: scale(4) }}>
+                  <Text className="text-orange-400 font-bebas" style={{ fontSize: fontScale(18) }}>{formatTime(getTimer(idx).elapsed)}</Text>
+                </TouchableOpacity>
               </View>
               {(exercise.mode || 'weight') === 'weight' && (
                 <View className="flex-row items-center">
-                  <Text className="text-orange-500/60 text-xs w-12">Weight</Text>
-                  <View className="flex-row flex-1 gap-3 pl-3">
+                  <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Weight</Text>
+                  <View className="flex-row flex-1" style={{ gap: scale(12) }}>
                     {[0, 1, 2].map(setIdx => {
-                      const weight = exerciseWeights[idx]?.[setIdx] || ''
                       return (
-                        <TextInput
+                        <WeightCell
                           key={setIdx}
-                          className="w-10 h-8 bg-black border border-orange-500/50 text-orange-500 rounded-lg text-center font-bold text-sm"
-                          value={weight}
+                          value={exerciseWeights[idx]?.[setIdx] || ''}
                           onChangeText={(val) => setWeight(idx, setIdx, val)}
-                          placeholder="0"
-                          placeholderTextColor="#f97316"
-                          keyboardType="numeric"
                         />
                       )
                     })}
                   </View>
+                </View>
+              )}
+              {exerciseMedia[idx]?.length > 0 && (
+                <View className="flex-row items-center justify-end mt-2">
+                  <TouchableOpacity onPress={() => setExerciseMedia(prev => ({ ...prev, [idx]: [] }))} className="mr-2">
+                    <Text className="text-red-500 font-bebas" style={{ fontSize: fontScale(18) }}>x</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setMediaViewer({ open: true, items: exerciseMedia[idx], index: 0 })}
+                    className="border border-orange-500/40 bg-orange-500/20 rounded" style={{ paddingHorizontal: scale(8), paddingVertical: scale(4) }}
+                  >
+                    <Text className="text-orange-400 font-bebas" style={{ fontSize: fontScale(15) }}>Media({exerciseMedia[idx].length})</Text>
+                  </TouchableOpacity>
                 </View>
               )}
               {showNotes[idx] && (
@@ -197,59 +296,84 @@ export default function SessionTracker({ exercises, onRemove, onAddExercises, on
                   onChangeText={(val) => setNotes(idx, val)}
                   placeholder="Notes..."
                   placeholderTextColor="#737373"
-                  className="bg-neutral-900 text-white text-sm border border-orange-500/30 rounded-lg px-3 py-2"
+                  className="bg-neutral-900 text-white border border-orange-500/30 rounded-lg mt-2"
+                  style={{ fontSize: fontScale(14), paddingHorizontal: scale(12), paddingVertical: scale(8) }}
                   multiline
                 />
               )}
+
             </AnimatedStaggerCard>
+            </Swipeable>
           ))
         ) : (
-          <Text className="text-orange-500/50 text-center py-10">No exercises yet. Tap "Add Exercises" to start.</Text>
+          <Text className="text-orange-500/50 text-center font-bebas" style={{ paddingVertical: scale(40), fontSize: fontScale(18) }}>No exercises yet. Tap Add Exercises to start.</Text>
         )}
       </ScrollView>
 
-      <View className="px-5 pb-5 pt-3">
+      <View style={{ paddingHorizontal: scale(20), paddingBottom: scale(20), paddingTop: scale(12) }}>
         <TouchableOpacity
           onPress={handleSaveClick}
           disabled={exercises.length === 0}
-          className={`border border-orange-500 bg-orange-500 rounded-2xl py-3 items-center ${exercises.length === 0 ? 'opacity-30' : ''}`}
+          activeOpacity={0.85}
+          className={`bg-[#f97316] border border-[#c2410c] rounded-2xl items-center ${exercises.length === 0 ? 'opacity-30' : ''}`}
+          style={{ paddingVertical: scale(14) }}
         >
-          <Text className="text-black font-bold text-3xl">Save</Text>
+          <Text className="text-black font-bebas" style={{ fontSize: fontScale(30) }}>Save</Text>
         </TouchableOpacity>
       </View>
 
       {mediaViewer.open && (
         <MediaViewer
           items={mediaViewer.items}
-          initialIndex={mediaViewer.index}
+          initialIndex={mediaViewer.index} 
           onClose={() => setMediaViewer({ open: false, items: [], index: 0 })}
         />
       )}
 
-      <Modal visible={showNameModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/60 items-center justify-center p-4">
-          <View className="bg-neutral-800 border border-orange-500/40 rounded-2xl p-6 w-full max-w-sm">
-            <Text className="text-white text-xl font-bold font-mono mb-4">Name this workout</Text>
+      <Modal visible={showNameModal} transparent animationType="none">
+        <View className="flex-1 bg-black/60 items-center justify-center" style={{ padding: scale(16) }}>
+          <Animated.View className="bg-neutral-800 border border-orange-500/40 rounded-2xl w-full" style={{ padding: scale(24), maxWidth: scale(380), opacity: popOpacity, transform: [{ scale: popScale }] }}>
+            <Text className="text-white font-bebas mb-4" style={{ fontSize: fontScale(20) }}>Name this workout</Text>
             <TextInput
               value={workoutName}
               onChangeText={setWorkoutName}
               placeholder="e.g. Chest Day, Push Day..."
               placeholderTextColor="#737373"
-              className="bg-neutral-900 text-white border border-orange-500/30 rounded-xl px-4 py-3 font-mono"
+              className="bg-neutral-900 text-white border border-orange-500/30 rounded-xl font-mono"
+              style={{ paddingHorizontal: scale(16), paddingVertical: scale(12), fontSize: fontScale(16) }}
               autoFocus
               onSubmitEditing={handleConfirmSave}
             />
-            <View className="flex-row gap-3 mt-6">
-              <TouchableOpacity onPress={() => setShowNameModal(false)} className="flex-1 border border-neutral-600 rounded-xl py-3 items-center">
-                <Text className="text-white font-semibold font-mono">Cancel</Text>
+            <View className="flex-row mt-6" style={{ gap: scale(12) }}>
+              <TouchableOpacity onPress={() => setShowNameModal(false)} className="flex-1 border border-neutral-600 rounded-xl items-center" style={{ paddingVertical: scale(12) }}>
+                <Text className="text-white font-bebas" style={{ fontSize: fontScale(16) }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleConfirmSave} className="flex-1 bg-orange-500 rounded-xl py-3 items-center">
-                <Text className="text-black font-bold font-mono">Save</Text>
+              <TouchableOpacity onPress={handleConfirmSave} className="flex-1 bg-orange-500 rounded-xl items-center" style={{ paddingVertical: scale(12) }}>
+                <Text className="text-black font-bebas" style={{ fontSize: fontScale(16) }}>Save</Text>
               </TouchableOpacity>
             </View>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      <Modal visible={captureModal.visible} transparent animationType="fade">
+        <View className="flex-1 bg-black/60 items-center justify-center" style={{ padding: scale(16) }}>
+          <View className="bg-neutral-800 border border-orange-500/40 rounded-2xl w-full" style={{ padding: scale(24), maxWidth: scale(380) }}>
+            <Text className="text-white font-bebas text-center mb-4" style={{ fontSize: fontScale(20) }}>{captureModal.type === 'photo' ? 'Add Photo' : 'Add Video'}</Text>
+            <TouchableOpacity onPress={() => handleCaptureAction('camera')} className="bg-orange-500 rounded-xl items-center mb-3" style={{ paddingVertical: scale(12) }}>
+              <Text className="text-black font-bebas" style={{ fontSize: fontScale(18) }}>{captureModal.type === 'photo' ? 'Take Photo' : 'Record Video'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleCaptureAction('gallery')} className="border border-orange-500/40 rounded-xl items-center mb-3" style={{ paddingVertical: scale(12) }}>
+              <Text className="text-orange-500 font-bebas" style={{ fontSize: fontScale(18) }}>Choose from Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleCaptureAction('cancel')} className="border border-neutral-600 rounded-xl items-center" style={{ paddingVertical: scale(12) }}>
+              <Text className="text-white/60 font-bebas" style={{ fontSize: fontScale(18) }}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
     </View>
   )
 }
+
+export default memo(SessionTracker)

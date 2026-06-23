@@ -1,20 +1,25 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { View, Text, TouchableOpacity } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { View, Text, TextInput, TouchableOpacity, Animated, Easing, Dimensions, Modal, ScrollView } from 'react-native'
+import { Check, Zap, BicepsFlexed, Edit3 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import ExercisesList from '../../src/components/ExercisesList'
 import SessionTracker from '../../src/components/SessionTracker'
 import ExerciseDetail from '../../src/components/ExerciseDetail'
 import GreetingUser from '../../src/components/GreetingUser'
 import Streak from '../../src/components/Streak'
-import { getUserName, getUserProfile } from '../../src/storage'
+import PrsBadge from '../../src/components/PrsBadge'
+import { getUserName, getUserProfile, getSessions, markDayComplete } from '../../src/storage'
+import { useResponsive } from '../../src/utils/responsive'
+
+const { width, height } = Dimensions.get('window')
+const W = width as number
 
 export default function HomeScreen() {
+  const r = useResponsive()
   const [showSession, setShowSession] = useState(false)
   const [showExercisesList, setShowExercisesList] = useState(false)
   const [selectedExercises, setSelectedExercises] = useState([])
-  const [btnActive, setBtnActive] = useState(false)
   const [previewExercise, setPreviewExercise] = useState(null)
   const [isFromStart, setIsFromStart] = useState(false)
   const isFromStartRef = useRef(isFromStart)
@@ -22,9 +27,173 @@ export default function HomeScreen() {
   const [exerciseWeights, setExerciseWeights] = useState({})
   const [exerciseSets, setExerciseSets] = useState({})
   const [exerciseNotes, setExerciseNotes] = useState({})
+  const [exerciseMedia, setExerciseMedia] = useState({})
   const [showSuccess, setShowSuccess] = useState(false)
   const [savedWorkoutName, setSavedWorkoutName] = useState('')
+  const [monthlyCount, setMonthlyCount] = useState(0)
+  const [streakRefreshKey, setStreakRefreshKey] = useState(0)
+  const [prs, setPrs] = useState<{ name: string; weight: string; reps: string }[]>([])
+  const [showAddPr, setShowAddPr] = useState(false)
+  const [showManagePr, setShowManagePr] = useState(false)
+  const [editingPrIndex, setEditingPrIndex] = useState<number | null>(null)
+  const [editPrName, setEditPrName] = useState('')
+  const [editPrWeight, setEditPrWeight] = useState('')
+  const [editPrReps, setEditPrReps] = useState('')
+  const [prName, setPrName] = useState('')
+  const [prWeight, setPrWeight] = useState('')
+  const [prReps, setPrReps] = useState('')
   const router = useRouter()
+
+  const refreshMonthlyCount = () => {
+    getSessions().then(sessions => {
+      const now = new Date()
+      const days = new Set(sessions.filter(s => {
+        const d = new Date(s.createdAt)
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+      }).map(s => new Date(s.createdAt).toDateString()))
+      const count = days.size
+      setMonthlyCount(count)
+    })
+  }
+
+  const titleOpacity = useRef(new Animated.Value(0)).current
+  const cardOpacity = useRef(new Animated.Value(0)).current
+  const cardTranslate = useRef(new Animated.Value(30)).current
+  const bottomOpacity = useRef(new Animated.Value(0)).current
+  const bottomTranslate = useRef(new Animated.Value(20)).current
+  const floatY = useRef(new Animated.Value(0)).current
+  const sessionSlide = useRef(new Animated.Value(W)).current
+  const bgOpacity = useRef(new Animated.Value(1)).current
+  const previewScale = useRef(new Animated.Value(0.9)).current
+  const previewOpacity = useRef(new Animated.Value(0)).current
+  const successScale = useRef(new Animated.Value(0.3)).current
+  const successOpacity = useRef(new Animated.Value(0)).current
+  const managePrScale = useRef(new Animated.Value(0.3)).current
+  const managePrOpacity = useRef(new Animated.Value(0)).current
+  const hasAnimated = useRef(false)
+
+  useEffect(() => {
+    if (previewExercise) {
+      Animated.parallel([
+        Animated.spring(previewScale, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(previewOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      previewScale.setValue(0.9)
+      previewOpacity.setValue(0)
+    }
+  }, [previewExercise])
+
+  useEffect(() => {
+    if (showSuccess) {
+      Animated.sequence([
+        Animated.timing(successOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(successScale, {
+          toValue: 1,
+          damping: 8,
+          stiffness: 180,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      successScale.setValue(0.3)
+      successOpacity.setValue(0)
+    }
+  }, [showSuccess])
+
+  useEffect(() => {
+    if (showManagePr) {
+      managePrOpacity.setValue(0)
+      managePrScale.setValue(0.3)
+      Animated.parallel([
+        Animated.timing(managePrOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(managePrScale, { toValue: 1, damping: 10, stiffness: 200, useNativeDriver: true }),
+      ]).start()
+    }
+  }, [showManagePr])
+
+  const runEntranceAnimation = useCallback(() => {
+    titleOpacity.setValue(0)
+    cardOpacity.setValue(0)
+    cardTranslate.setValue(30)
+    bottomOpacity.setValue(0)
+    bottomTranslate.setValue(20)
+
+    Animated.sequence([
+      Animated.timing(titleOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.parallel([
+        Animated.timing(cardOpacity, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardTranslate, {
+          toValue: 0,
+          damping: 18,
+          stiffness: 200,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(bottomOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(bottomTranslate, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 250,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start()
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshMonthlyCount()
+      setStreakRefreshKey(prev => prev + 1)
+      if (!hasAnimated.current) {
+        hasAnimated.current = true
+        runEntranceAnimation()
+      }
+    }, [runEntranceAnimation])
+  )
+
+  const animateSession = useCallback((open) => {
+    bgOpacity.setValue(open ? 1 : 0)
+    Animated.timing(bgOpacity, {
+      toValue: open ? 0 : 1,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start()
+    sessionSlide.setValue(open ? W : 0)
+    Animated.timing(sessionSlide, {
+      toValue: open ? 0 : W,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start()
+  }, [])
 
   useEffect(() => {
     Promise.all([getUserName(), getUserProfile()]).then(([name, profile]) => {
@@ -32,6 +201,23 @@ export default function HomeScreen() {
         router.replace('/onboarding')
       }
     })
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatY, {
+          toValue: -8,
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatY, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start()
   }, [])
 
   const setWeight = useCallback((exerciseIdx, setIdx, weight) => {
@@ -52,7 +238,7 @@ export default function HomeScreen() {
     setExerciseSets(prev => ({
       ...prev,
       [exerciseIdx]: {
-        ...prev[exerciseIdx],
+        ...(prev[exerciseIdx] || {}),
         [setIdx]: value
       }
     }))
@@ -75,14 +261,50 @@ export default function HomeScreen() {
 
   const handleRemoveExercise = useCallback((idx) => {
     setSelectedExercises(prev => prev.filter((_, i) => i !== idx))
+    setExerciseWeights(prev => {
+      const next = {}
+      Object.keys(prev).forEach(key => {
+        const k = parseInt(key)
+        if (k < idx) next[k] = prev[k]
+        if (k > idx) next[k - 1] = prev[k]
+      })
+      return next
+    })
+    setExerciseSets(prev => {
+      const next = {}
+      Object.keys(prev).forEach(key => {
+        const k = parseInt(key)
+        if (k < idx) next[k] = prev[k]
+        if (k > idx) next[k - 1] = prev[k]
+      })
+      return next
+    })
+    setExerciseNotes(prev => {
+      const next = {}
+      Object.keys(prev).forEach(key => {
+        const k = parseInt(key)
+        if (k < idx) next[k] = prev[k]
+        if (k > idx) next[k - 1] = prev[k]
+      })
+      return next
+    })
+    setExerciseMedia(prev => {
+      const next = {}
+      Object.keys(prev).forEach(key => {
+        const k = parseInt(key)
+        if (k < idx) next[k] = prev[k]
+        if (k > idx) next[k - 1] = prev[k]
+      })
+      return next
+    })
   }, [])
 
   const handleStartClick = useCallback(() => {
-    setBtnActive(true)
+    animateSession(true)
     setShowSession(true)
     setShowExercisesList(true)
     setIsFromStart(true)
-  }, [])
+  }, [animateSession])
 
   const handleAddExercises = useCallback(() => {
     setShowExercisesList(true)
@@ -93,32 +315,81 @@ export default function HomeScreen() {
     setShowExercisesList(false)
     if (isFromStartRef.current) {
       setSelectedExercises([])
-      setBtnActive(false)
+      animateSession(false)
       setShowSession(false)
     }
-  }, [])
+  }, [animateSession])
+
+  const handleAddPr = () => {
+    if (prName.trim() && prWeight.trim() && prReps.trim()) {
+      setPrs(prev => [...prev, { name: prName.trim(), weight: prWeight.trim(), reps: prReps.trim() }])
+      setPrName('')
+      setPrWeight('')
+      setPrReps('')
+      setShowAddPr(false)
+    }
+  }
+
+  const handleEditPr = (i: number) => {
+    const pr = prs[i]
+    setEditingPrIndex(i)
+    setEditPrName(pr.name)
+    setEditPrWeight(pr.weight)
+    setEditPrReps(pr.reps)
+  }
+
+  const handleSaveEditPr = () => {
+    if (editingPrIndex === null || !editPrName.trim() || !editPrWeight.trim() || !editPrReps.trim()) return
+    setPrs(prev => prev.map((pr, i) =>
+      i === editingPrIndex ? { name: editPrName.trim(), weight: editPrWeight.trim(), reps: editPrReps.trim() } : pr
+    ))
+    setEditingPrIndex(null)
+    setEditPrName('')
+    setEditPrWeight('')
+    setEditPrReps('')
+  }
 
   const handleSessionSaved = useCallback((name) => {
     setSelectedExercises([])
     setExerciseWeights({})
     setExerciseSets({})
     setExerciseNotes({})
+    setExerciseMedia({})
     setSavedWorkoutName(name)
+    refreshMonthlyCount()
+    markDayComplete(new Date())
+    setStreakRefreshKey(prev => prev + 1)
     setShowSuccess(true)
     setTimeout(() => {
-      setShowSuccess(false)
-      setShowSession(false)
-      setBtnActive(false)
-      setSavedWorkoutName('')
+      Animated.parallel([
+        Animated.timing(successOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successScale, {
+          toValue: 0.3,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShowSuccess(false)
+        animateSession(false)
+        setTimeout(() => {
+          setShowSession(false)
+          setSavedWorkoutName('')
+        }, 350)
+      })
     }, 1800)
-  }, [])
+  }, [animateSession])
 
   return (
     <LinearGradient colors={['#111111', '#9a3412', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} locations={[0.45, 0.86, 1]} className="flex-1">
+
       <View className="flex-1">
         {showSuccess && (
-          <View className="absolute inset-0 items-center justify-center px-6" pointerEvents="auto">
-            <View
+          <Animated.View className="absolute inset-0 items-center justify-center z-50" pointerEvents="auto" style={{ opacity: successOpacity, paddingHorizontal: r.scale(24) }}>
+            <Animated.View
               className="rounded-2xl"
               style={{
                 shadowColor: '#f97316',
@@ -126,53 +397,180 @@ export default function HomeScreen() {
                 shadowOpacity: 0.8,
                 shadowRadius: 32,
                 elevation: 16,
+                transform: [{ scale: successScale }],
               }}
             >
-              <View className="border border-orange-500/50 rounded-2xl p-8 items-center gap-6 bg-neutral-900">
-                <View className="bg-orange-500 rounded-full p-5">
-                  <Check color="black" size={48} />
+              <View className="border border-orange-500/50 rounded-2xl items-center bg-neutral-900" style={{ padding: r.scale(32), gap: r.scale(24) }}>
+                <View className="bg-orange-500 rounded-full" style={{ padding: r.scale(20) }}>
+                  <Check color="black" size={r.scale(48)} />
                 </View>
-                <Text className="text-orange-500 text-4xl font-bold text-center">{savedWorkoutName}</Text>
-                <Text className="text-white/70 text-xl font-mono tracking-wide">Workout Saved!</Text>
+                <Text className="text-orange-500 font-bold text-center" style={{ fontSize: r.fontScale(36) }}>{savedWorkoutName}</Text>
+                <Text className="text-white/70 font-mono tracking-wide" style={{ fontSize: r.fontScale(20) }}>Workout Saved!</Text>
               </View>
-            </View>
-          </View>
+            </Animated.View>
+          </Animated.View>
         )}
 
-        <View className="absolute inset-0 px-6 pb-6" pointerEvents={showSession ? 'none' : 'auto'} style={{ opacity: showSession ? 0 : 1 }}>
-          <View className="flex-[0.4]" />
-          <View className="items-center gap-6">
-            <Text className="font-bebas text-orange-500 text-4xl border border-orange-500 rounded-2xl px-4 py-1.5 tracking-wider text-center">
+        <Animated.View className="absolute inset-0" pointerEvents={showSession ? 'none' : 'auto'} style={{ opacity: bgOpacity, paddingHorizontal: r.scale(24), paddingBottom: r.scale(16) }} renderToHardwareTextureAndroid={true} shouldRasterizeIOS={true}>
+          <View style={{ height: r.scale(48) }} />
+
+          <Animated.View style={{ opacity: titleOpacity, marginBottom: r.scale(24) }} className="items-center justify-center">
+            <Text className="font-bebas text-orange-500 border border-orange-500 rounded-2xl tracking-wider text-center" style={{ fontSize: r.fontScale(36), paddingHorizontal: r.scale(16), paddingVertical: r.scale(6) }}>
               GYM TRACKER
             </Text>
-            <GreetingUser />
-          </View>
-          <View className="items-center mt-9 mb-4">
-            <Streak />
-          </View>
-          <View className="flex-1" />
-          <View className="items-center gap-4 pb-8">
-            <View className="items-center self-stretch pb-7">
-              <Text className="text-white text-4xl italic text-center flex-shrink">"Discipline today,</Text>
-              <Text className="text-white text-4xl italic text-center flex-shrink"> strength tomorrow."</Text>
-            </View>
-            <Text className="font-bebas text-5xl text-white text-center leading-tight">
-              What would you like to do{' '}
-              <Text className="font-bold text-orange-500">today?</Text>
-            </Text>
-            <TouchableOpacity onPress={handleStartClick} className={`px-6 py-3 rounded-2xl flex-row items-center gap-3 ${btnActive ? 'bg-orange-500' : 'border border-orange-500'}`}>
-              <Text className={`font-bebas text-4xl ${btnActive ? 'text-white' : 'text-orange-500'}`}>Start Session</Text>
-              <Text className={`text-5xl font-semibold tracking-widest ${btnActive ? 'text-white' : 'text-orange-500'}`}>→</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </Animated.View>
 
-        <View className="absolute inset-0 px-4 pb-4" pointerEvents={showSession && !showSuccess ? 'auto' : 'none'} style={{ opacity: showSession && !showSuccess ? 1 : 0 }}>
+          <Animated.View
+            style={{
+              opacity: cardOpacity,
+              transform: [{ translateY: cardTranslate }],
+            }}
+            className="w-full"
+            renderToHardwareTextureAndroid={true}
+            shouldRasterizeIOS={true}
+          >
+            <View className="relative w-full">
+              <View className="absolute rounded-full" style={{ width: r.scale(288), height: r.scale(288), backgroundColor: 'rgba(249,115,22,0.025)', left: '50%', marginLeft: r.scale(-144), top: '50%', marginTop: r.scale(-144) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(192), height: r.scale(192), backgroundColor: 'rgba(249,115,22,0.045)', left: '50%', marginLeft: r.scale(-96), top: '50%', marginTop: r.scale(-96) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(112), height: r.scale(112), backgroundColor: 'rgba(249,115,22,0.07)', left: '50%', marginLeft: r.scale(-56), top: '50%', marginTop: r.scale(-56) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(56), height: r.scale(56), backgroundColor: 'rgba(249,115,22,0.12)', left: '50%', marginLeft: r.scale(-28), top: '50%', marginTop: r.scale(-28) }} pointerEvents="none" />
+              <View className="rounded-2xl w-full" style={{ paddingHorizontal: r.scale(12), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
+                <GreetingUser />
+              </View>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: cardOpacity,
+              transform: [{ translateY: cardTranslate }],
+              marginTop: r.scale(12),
+            }}
+            className="w-full"
+            renderToHardwareTextureAndroid={true}
+            shouldRasterizeIOS={true}
+          >
+            <View className="relative w-full">
+              <View className="absolute rounded-full" style={{ width: r.scale(288), height: r.scale(288), backgroundColor: 'rgba(249,115,22,0.025)', left: '50%', marginLeft: r.scale(-144), top: '50%', marginTop: r.scale(-144) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(192), height: r.scale(192), backgroundColor: 'rgba(249,115,22,0.045)', left: '50%', marginLeft: r.scale(-96), top: '50%', marginTop: r.scale(-96) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(112), height: r.scale(112), backgroundColor: 'rgba(249,115,22,0.07)', left: '50%', marginLeft: r.scale(-56), top: '50%', marginTop: r.scale(-56) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(56), height: r.scale(56), backgroundColor: 'rgba(249,115,22,0.12)', left: '50%', marginLeft: r.scale(-28), top: '50%', marginTop: r.scale(-28) }} pointerEvents="none" />
+              <View className="border border-orange-500/30 rounded-3xl w-full" style={{ padding: r.scale(20), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
+                <Streak refreshKey={streakRefreshKey} />
+              </View>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: cardOpacity,
+              transform: [{ translateY: cardTranslate }],
+              marginTop: r.scale(12),
+              gap: r.scale(12),
+            }}
+            className="w-full flex-row"
+            renderToHardwareTextureAndroid={true}
+            shouldRasterizeIOS={true}
+          >
+            <View className="relative" style={{ flex: 0.4 }}>
+              <View className="absolute rounded-full" style={{ width: r.scale(176), height: r.scale(176), backgroundColor: 'rgba(249,115,22,0.025)', left: '50%', marginLeft: r.scale(-88), top: '50%', marginTop: r.scale(-88) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(96), height: r.scale(96), backgroundColor: 'rgba(249,115,22,0.055)', left: '50%', marginLeft: r.scale(-48), top: '50%', marginTop: r.scale(-48) }} pointerEvents="none" />
+              <View className="absolute rounded-full" style={{ width: r.scale(48), height: r.scale(48), backgroundColor: 'rgba(249,115,22,0.1)', left: '50%', marginLeft: r.scale(-24), top: '50%', marginTop: r.scale(-24) }} pointerEvents="none" />
+              <View
+                className="border border-orange-500/30 rounded-3xl items-center justify-center w-full"
+                style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), height: r.scale(128), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: r.scale(12), marginTop: r.scale(12), marginBottom: r.scale(8), marginLeft: r.scale(8) }}>
+                <View className="border border-orange-500/50 rounded-full items-center justify-center" style={{ width: r.scale(28), height: r.scale(28) }}>
+                  <BicepsFlexed size={r.scale(16)} color="#f97316" fill="#f97316" />
+                </View>
+                <View>
+                  <Text numberOfLines={1} className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(7) }}>WORKOUT IN</Text>
+                  <Text numberOfLines={1} className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(7) }}>THIS MONTH</Text>
+                </View>
+              </View>
+              <Text className="font-bebas text-orange-500 tracking-[2px]" style={{ fontSize: r.fontScale(48) }}>{monthlyCount}</Text>
+              <Text className="font-inter-bold text-white/50 tracking-[1px]" style={{ fontSize: r.fontScale(11), marginTop: r.scale(-12) }}>Days</Text>
+            </View>
+            </View>
+
+            <View className="relative" style={{ flex: 0.6 }}>
+              <View
+                className="border border-orange-500/30 rounded-3xl w-full items-start"
+                style={{ paddingHorizontal: r.scale(16), paddingTop: r.scale(12), paddingBottom: r.scale(12), height: r.scale(128), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: r.scale(4) }}>
+                <PrsBadge size={r.scale(26)} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: r.scale(8) }}>
+                  <TouchableOpacity onPress={() => setShowManagePr(true)} style={{ padding: r.scale(4) }}>
+                    <Edit3 size={r.scale(14)} color="#f97316" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowAddPr(true)} className="bg-orange-500 rounded-full items-center justify-center" style={{ width: r.scale(20), height: r.scale(20) }}>
+                    <Text className="text-black font-inter-bold leading-none" style={{ fontSize: r.fontScale(12) }}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {prs.length === 0 ? (
+                <Text className="font-inter text-white/30 italic text-center w-full" style={{ fontSize: r.fontScale(12) }}>Write your PR here</Text>
+              ) : (
+                <ScrollView className="gap-1" showsVerticalScrollIndicator={false} style={{ maxHeight: r.scale(80) }}>
+                  {prs.map((pr, i) => (
+                    <View key={i} className="flex-row justify-between items-center w-full">
+                      <Text numberOfLines={1} className="font-mono text-gray-300 flex-1" style={{ fontSize: r.fontScale(10) }}>{pr.name}</Text>
+                      <Text className="font-mono text-gray-300" style={{ fontSize: r.fontScale(10) }}>{pr.weight}kg × {pr.reps}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: bottomOpacity,
+              transform: [{ translateY: bottomTranslate }],
+              gap: r.scale(4),
+            }}
+            className="items-center justify-center"
+          >
+            <Text className="font-bebas text-white/80 text-center tracking-[2px]" style={{ fontSize: r.fontScale(40) }}>
+              WHAT WILL YOU CONQUER{' '}
+              <Text className="text-orange-500">TODAY?</Text>
+            </Text>
+
+            <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+              <View className="items-center justify-center">
+                <TouchableOpacity
+                  onPress={handleStartClick}
+                  activeOpacity={0.85}
+                  className="flex-row items-center rounded-2xl bg-[#f97316] border border-[#c2410c]"
+                  style={{ gap: r.scale(12), paddingHorizontal: r.scale(32), paddingVertical: r.scale(10) }}
+                >
+                  <Zap size={r.scale(24)} color="black" />
+                  <Text className="font-bebas tracking-[2px] text-black" style={{ fontSize: r.fontScale(30) }}>Start Session</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </Animated.View>
+
+          <Animated.View style={{ opacity: bottomOpacity }} className="items-center">
+            <Text numberOfLines={1} className="font-mono text-white/40 tracking-[2px]" style={{ fontSize: r.fontScale(9) }}>
+              DISCIPLINE &bull; CONSISTENCY &bull; STRENGTH
+            </Text>
+          </Animated.View>
+        </Animated.View>
+
+        <Animated.View className="absolute inset-0" pointerEvents={showSession && !showSuccess ? 'auto' : 'none'} style={{ transform: [{ translateX: sessionSlide }], paddingHorizontal: r.scale(16), paddingBottom: r.scale(16) }}>
           {previewExercise ? (
-            <ExerciseDetail exercise={previewExercise} onSelect={handleConfirmExercise} onBack={handleCancelPreview} />
-          ) : showExercisesList ? (
+            <Animated.View className="absolute inset-0 z-10 bg-[#050505]" style={{ opacity: previewOpacity, transform: [{ scale: previewScale }], paddingHorizontal: r.scale(16), paddingBottom: r.scale(16) }}>
+              <ExerciseDetail exercise={previewExercise} onSelect={handleConfirmExercise} onBack={handleCancelPreview} />
+            </Animated.View>
+          ) : null}
+          <View style={{ flex: 1, display: !previewExercise && showExercisesList && !showSuccess ? 'flex' : 'none' }}>
             <ExercisesList onSelectExercise={handleSelectExercise} onClose={handleCloseExercises} />
-          ) : (
+          </View>
+          <View style={{ flex: 1, display: !previewExercise && !showExercisesList && !showSuccess ? 'flex' : 'none' }}>
             <SessionTracker
               exercises={selectedExercises}
               onRemove={handleRemoveExercise}
@@ -181,13 +579,142 @@ export default function HomeScreen() {
               exerciseWeights={exerciseWeights}
               exerciseSets={exerciseSets}
               exerciseNotes={exerciseNotes}
+              exerciseMedia={exerciseMedia}
+              setExerciseMedia={setExerciseMedia}
               setWeight={setWeight}
               setReps={setReps}
               setNotes={setNotes}
             />
-          )}
-        </View>
+          </View>
+        </Animated.View>
       </View>
+
+      <Modal visible={showAddPr} transparent animationType="slide" onRequestClose={() => setShowAddPr(false)}>
+        <TouchableOpacity className="flex-1 justify-end" activeOpacity={1} onPress={() => setShowAddPr(false)}>
+          <View className="bg-[#1a1a1a] rounded-t-3xl" style={{
+            padding: r.scale(24),
+            gap: r.scale(16),
+            shadowColor: '#f97316',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 20,
+            elevation: 20,
+          }}>
+            <Text className="font-bebas text-orange-500 tracking-[2px] text-center" style={{ fontSize: r.fontScale(24) }}>ADD PERSONAL RECORD</Text>
+            <TextInput
+              value={prName}
+              onChangeText={setPrName}
+              placeholder="Exercise name"
+              placeholderTextColor="#555"
+              className="border border-orange-500/30 rounded-2xl text-white font-inter" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+            />
+            <View className="flex-row" style={{ gap: r.scale(12) }}>
+              <TextInput
+                value={prWeight}
+                onChangeText={setPrWeight}
+                placeholder="Weight (kg)"
+                placeholderTextColor="#555"
+                keyboardType="numeric"
+                className="border border-orange-500/30 rounded-2xl text-white font-inter flex-1" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+              />
+              <TextInput
+                value={prReps}
+                onChangeText={setPrReps}
+                placeholder="Reps"
+                placeholderTextColor="#555"
+                keyboardType="numeric"
+                className="border border-orange-500/30 rounded-2xl text-white font-inter flex-1" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleAddPr}
+              className="bg-orange-500 rounded-2xl items-center"
+              style={{
+                paddingVertical: r.scale(14),
+                shadowColor: '#f97316',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.5,
+                shadowRadius: 12,
+                elevation: 8,
+              }}
+            >
+              <Text className="font-bebas text-black tracking-[2px]" style={{ fontSize: r.fontScale(20) }}>ADD PR</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={showManagePr} transparent animationType="none" onRequestClose={() => { setEditingPrIndex(null); setShowManagePr(false) }}>
+        <TouchableOpacity className="flex-1 justify-end" activeOpacity={1} onPress={() => { setEditingPrIndex(null); setShowManagePr(false) }}>
+          <Animated.View className="flex-1 justify-end" style={{ opacity: managePrOpacity }}>
+            <Animated.View className="bg-[#1a1a1a] rounded-t-3xl" style={{
+              padding: r.scale(24),
+              gap: r.scale(16),
+              shadowColor: '#f97316',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+              elevation: 20,
+              transform: [{ scale: managePrScale }],
+            }}>
+              <Text className="font-bebas text-orange-500 tracking-[2px] text-center" style={{ fontSize: r.fontScale(24) }}>
+                {editingPrIndex !== null ? 'EDIT PR' : 'MANAGE PRs'}
+              </Text>
+              {editingPrIndex !== null ? (
+                <>
+                  <TextInput
+                    value={editPrName}
+                    onChangeText={setEditPrName}
+                    placeholder="Exercise name"
+                    placeholderTextColor="#555"
+                    className="border border-orange-500/30 rounded-2xl text-white font-inter" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+                  />
+                  <View className="flex-row" style={{ gap: r.scale(12) }}>
+                    <TextInput
+                      value={editPrWeight}
+                      onChangeText={setEditPrWeight}
+                      placeholder="Weight (kg)"
+                      placeholderTextColor="#555"
+                      keyboardType="numeric"
+                      className="border border-orange-500/30 rounded-2xl text-white font-inter flex-1" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+                    />
+                    <TextInput
+                      value={editPrReps}
+                      onChangeText={setEditPrReps}
+                      placeholder="Reps"
+                      placeholderTextColor="#555"
+                      keyboardType="numeric"
+                      className="border border-orange-500/30 rounded-2xl text-white font-inter flex-1" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(14) }}
+                    />
+                  </View>
+                  <View className="flex-row" style={{ gap: r.scale(12) }}>
+                    <TouchableOpacity onPress={() => setEditingPrIndex(null)} className="flex-1 border border-orange-500/40 rounded-2xl items-center" style={{ paddingVertical: r.scale(14) }}>
+                      <Text className="font-bebas text-orange-500 tracking-[2px]" style={{ fontSize: r.fontScale(18) }}>CANCEL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleSaveEditPr} className="flex-1 bg-orange-500 rounded-2xl items-center" style={{ paddingVertical: r.scale(14) }}>
+                      <Text className="font-bebas text-black tracking-[2px]" style={{ fontSize: r.fontScale(18) }}>SAVE</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : prs.length === 0 ? (
+                <Text className="font-inter text-white/40 text-center" style={{ fontSize: r.fontScale(14) }}>No PRs yet. Add one!</Text>
+              ) : (
+                prs.map((pr, i) => (
+                  <TouchableOpacity key={i} onPress={() => handleEditPr(i)} className="flex-row items-center justify-between bg-[#111] rounded-2xl border border-orange-500/20" style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12) }}>
+                    <View>
+                      <Text className="font-inter text-white" style={{ fontSize: r.fontScale(14) }}>{pr.name}</Text>
+                      <Text className="font-mono text-gray-400" style={{ fontSize: r.fontScale(12) }}>{pr.weight} kg × {pr.reps}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setPrs(prev => prev.filter((_, idx) => idx !== i))}>
+                      <Text className="font-inter-bold text-red-400" style={{ fontSize: r.fontScale(14) }}>Delete</Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))
+              )}
+            </Animated.View>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
     </LinearGradient>
   )
 }

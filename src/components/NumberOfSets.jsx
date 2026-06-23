@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { View, Text, TextInput, TouchableOpacity } from 'react-native'
+import { scale, fontScale } from '../utils/responsive'
 
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60)
@@ -13,6 +14,12 @@ export default function NumberOfSets({ reps, setReps, idx, placeholder = 'R', mo
   const [paused, setPaused] = useState(false)
   const intervalRef = useRef(null)
   const lastClickRef = useRef(0)
+  const elapsedRef = useRef(0)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    elapsedRef.current = elapsed
+  }, [elapsed])
 
   useEffect(() => {
     if (running && !paused) {
@@ -46,6 +53,7 @@ export default function NumberOfSets({ reps, setReps, idx, placeholder = 'R', mo
       if (intervalRef.current) clearInterval(intervalRef.current)
       intervalRef.current = null
       setPaused(true)
+      setReps(idx, formatTime(elapsedRef.current))
     } else if (paused) {
       setPaused(false)
     } else {
@@ -57,8 +65,8 @@ export default function NumberOfSets({ reps, setReps, idx, placeholder = 'R', mo
   if (mode === 'timer') {
     const display = running ? formatTime(elapsed) : (reps && reps !== 'T' ? reps : 'T')
     return (
-      <TouchableOpacity onPress={handleClick} className="w-14 h-8 bg-black border border-orange-500/50 rounded-lg items-center justify-center">
-        <Text className="text-orange-500 text-center font-bold text-xs">
+      <TouchableOpacity onPress={handleClick} className="bg-neutral-800 border border-orange-500/50 rounded-lg items-center justify-center" style={{ width: scale(38), height: scale(30) }}>
+        <Text className="text-orange-500 text-center font-bold" style={{ fontSize: fontScale(12) }}>
           {display}
         </Text>
       </TouchableOpacity>
@@ -67,8 +75,10 @@ export default function NumberOfSets({ reps, setReps, idx, placeholder = 'R', mo
 
   return (
     <TextInput
-      className="w-10 h-8 bg-black border border-orange-500/50 text-orange-500 rounded-lg text-center font-bold text-sm"
-      value={reps}
+      ref={inputRef}
+      className="bg-neutral-800 border border-orange-500/50 text-white rounded-lg text-center"
+      style={{ width: scale(38), height: scale(30), color: '#FFFFFF', paddingVertical: 0, fontSize: fontScale(14) }}
+      value={String(reps ?? '')}
       onChangeText={(val) => {
         if (val === '' || /^\d+$/.test(val)) {
           setReps(idx, val)

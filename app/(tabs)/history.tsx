@@ -1,14 +1,16 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { View, Text, ScrollView } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect } from 'expo-router'
 import SavedSession from '../../src/components/SavedSession'
-import AnimatedStaggerCard from '../../src/components/AnimatedStaggerCard'
 import { getSessions, deleteSession } from '../../src/storage'
+import { useResponsive } from '../../src/utils/responsive'
 
 export default function HistoryScreen() {
+  const r = useResponsive()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
+  const focusCount = useRef(0)
 
   const fetchSessions = async () => {
     setLoading(true)
@@ -19,6 +21,7 @@ export default function HistoryScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      focusCount.current += 1
       fetchSessions()
     }, [])
   )
@@ -28,20 +31,24 @@ export default function HistoryScreen() {
     setSessions(prev => prev.filter(s => s._id !== id))
   }
 
+  const handleNeedRefresh = () => {
+    fetchSessions()
+  }
+
   return (
     <LinearGradient colors={['#111111', '#9a3412', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} locations={[0.45, 0.86, 1]} className="flex-1">
-      <AnimatedStaggerCard direction="right" index={0} className="flex-1 pt-12">
-        <View className="px-5 pb-2">
-          <Text className="text-white text-2xl font-bold">Previous Sessions</Text>
+      <View className="flex-1" style={{ paddingTop: r.scale(48) }}>
+        <View style={{ paddingHorizontal: r.scale(20), paddingBottom: r.scale(8) }}>
+          <Text className="text-white font-bold" style={{ fontSize: r.fontScale(24) }}>Previous Sessions</Text>
         </View>
-        <ScrollView className="flex-1 px-5">
+        <ScrollView className="flex-1" style={{ paddingHorizontal: r.scale(20) }}>
           {loading ? (
-            <Text className="text-orange-500/50 text-center font-mono">Loading...</Text>
+            <Text className="text-orange-500/50 text-center font-mono" style={{ fontSize: r.fontScale(16) }}>Loading...</Text>
           ) : (
-            <SavedSession sessions={sessions} onDelete={handleDelete} />
+            <SavedSession sessions={sessions} onDelete={handleDelete} focusCount={focusCount.current} onNeedRefresh={handleNeedRefresh} />
           )}
         </ScrollView>
-      </AnimatedStaggerCard>
+      </View>
     </LinearGradient>
   )
 }
