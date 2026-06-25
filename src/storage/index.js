@@ -25,8 +25,8 @@ export function deleteMediaFile(uri) {
     if (file.exists) {
       file.delete()
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('deleteMediaFile failed:', e)
   }
 }
 
@@ -64,8 +64,8 @@ export async function getUserName() {
 export async function setUserName(name) {
   try {
     await AsyncStorage.setItem(KEYS.USER_NAME, name)
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('setUserName failed:', e)
   }
 }
 
@@ -98,8 +98,8 @@ export async function updateCustomExercise(id, updates) {
     exercises[idx] = { ...exercises[idx], ...updates }
     await AsyncStorage.setItem(KEYS.EXERCISES, JSON.stringify(exercises))
     return exercises[idx]
-  } catch {
-    return null
+  } catch (e) {
+    console.warn('deleteCustomExercise failed:', e)
   }
 }
 
@@ -108,8 +108,8 @@ export async function deleteCustomExercise(id) {
     const exercises = await getCustomExercises()
     const filtered = exercises.filter(e => e._id !== id)
     await AsyncStorage.setItem(KEYS.EXERCISES, JSON.stringify(filtered))
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('deleteCustomExercise failed:', e)
   }
 }
 
@@ -142,8 +142,8 @@ export async function updateSessionName(id, name) {
     sessions[idx] = { ...sessions[idx], name }
     await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions))
     return sessions[idx]
-  } catch {
-    return null
+  } catch (e) {
+    console.warn('updateSessionName failed:', e)
   }
 }
 
@@ -179,8 +179,8 @@ export async function getUserProfile() {
   try {
     const data = await AsyncStorage.getItem(KEYS.USER_PROFILE)
     return data ? JSON.parse(data) : {}
-  } catch {
-    return {}
+  } catch (e) {
+    console.warn('deleteSession failed:', e)
   }
 }
 
@@ -188,8 +188,8 @@ export async function saveUserProfile(profile) {
   try {
     const existing = await getUserProfile()
     await AsyncStorage.setItem(KEYS.USER_PROFILE, JSON.stringify({ ...existing, ...profile }))
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('saveUserProfile failed:', e)
   }
 }
 
@@ -205,8 +205,8 @@ export async function getStreak() {
 export async function setStreak(streak) {
   try {
     await AsyncStorage.setItem(KEYS.STREAK, JSON.stringify(streak))
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('setStreak failed:', e)
   }
 }
 
@@ -264,7 +264,7 @@ export async function markDayComplete(date) {
     const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
     streak[key] = true
     await setStreak(streak)
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('markDayComplete failed:', e)
   }
 }

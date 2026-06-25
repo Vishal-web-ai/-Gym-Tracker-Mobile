@@ -5,8 +5,10 @@ import { useFocusEffect } from 'expo-router'
 import SavedSession from '../../src/components/SavedSession'
 import { getSessions, deleteSession } from '../../src/storage'
 import { useResponsive } from '../../src/utils/responsive'
+import { TourTarget, useTour } from '../../src/tour'
 
 export default function HistoryScreen() {
+  const tour = useTour()
   const r = useResponsive()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
@@ -45,7 +47,13 @@ export default function HistoryScreen() {
           {loading ? (
             <Text className="text-orange-500/50 text-center font-mono" style={{ fontSize: r.fontScale(16) }}>Loading...</Text>
           ) : (
-            <SavedSession sessions={sessions} onDelete={handleDelete} focusCount={focusCount.current} onNeedRefresh={handleNeedRefresh} />
+            <TourTarget id="session-history-list">
+            <SavedSession sessions={sessions} onDelete={handleDelete} focusCount={focusCount.current} onNeedRefresh={handleNeedRefresh} onSessionPress={() => {
+              setTimeout(() => {
+                if (tour.currentStep?.id === 'previous-sessions') tour.nextStep()
+              }, 200)
+            }} />
+            </TourTarget>
           )}
         </ScrollView>
       </View>

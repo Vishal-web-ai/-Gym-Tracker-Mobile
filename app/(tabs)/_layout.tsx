@@ -3,8 +3,9 @@ import { Pressable, View, Image } from 'react-native'
 import { Tabs, usePathname } from 'expo-router'
 import { Dumbbell, Clock, User } from 'lucide-react-native'
 import CircularReveal from '../../src/components/CircularReveal'
-import { scale } from '../../src/utils/responsive'
+import { scale, fontScale } from '../../src/utils/responsive'
 import { getUserProfile } from '../../src/storage'
+import { useTour } from '../../src/tour'
 
 const RevealContext = createContext(null)
 
@@ -13,6 +14,39 @@ function TabButton({ children, onPress, tabName, ...rest }) {
   const trigger = useContext(RevealContext)
   const pathname = usePathname()
   const isActive = tabName === 'index' ? pathname === '/' : pathname === `/${tabName}`
+  const { registerTarget, unregisterTarget, currentStep } = useTour()
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const node = ref.current
+      if (!node || typeof node.measureInWindow !== 'function') return
+      node.measureInWindow((x, y, w, h) => {
+        if (w > 0 && h > 0) {
+          const targetId = `${tabName}-tab-btn`
+          registerTarget(targetId, { x, y, width: w, height: h })
+        }
+      })
+    }, 600)
+    return () => {
+      clearTimeout(timer)
+      if (tabName !== 'index') unregisterTarget(`${tabName}-tab-btn`)
+    }
+  }, [tabName, registerTarget, unregisterTarget])
+
+  useEffect(() => {
+    if (currentStep?.id === `history-tab` || currentStep?.id === `profile-tab`) {
+      const timer = setTimeout(() => {
+        const node = ref.current
+        if (!node || typeof node.measureInWindow !== 'function') return
+        node.measureInWindow((x, y, w, h) => {
+          if (w > 0 && h > 0) {
+            registerTarget(`${tabName}-tab-btn`, { x, y, width: w, height: h })
+          }
+        })
+      }, 200)
+      return () => clearTimeout(timer)
+    }
+  }, [currentStep?.id, tabName, registerTarget])
 
   const handlePress = useCallback(() => {
     if (isActive) {
@@ -81,7 +115,7 @@ export default function TabLayout() {
           },
           tabBarActiveTintColor: '#f97316',
           tabBarInactiveTintColor: '#666',
-          tabBarLabelStyle: { fontFamily: 'monospace', fontSize: scale(11) },
+          tabBarLabelStyle: { fontFamily: 'monospace', fontSize: fontScale(11) },
           tabBarButton: (props) => <Pressable {...props} />,
         }}
       >

@@ -11,6 +11,7 @@ import Streak from '../../src/components/Streak'
 import PrsBadge from '../../src/components/PrsBadge'
 import { getUserName, getUserProfile, getSessions, markDayComplete } from '../../src/storage'
 import { useResponsive } from '../../src/utils/responsive'
+import { TourTarget, useTour } from '../../src/tour'
 
 const { width, height } = Dimensions.get('window')
 const W = width as number
@@ -43,6 +44,8 @@ export default function HomeScreen() {
   const [prWeight, setPrWeight] = useState('')
   const [prReps, setPrReps] = useState('')
   const router = useRouter()
+  const tour = useTour()
+  const hideFloatAnimation = tour.isActive && tour.currentStep?.id === 'home-start-session'
 
   const refreshMonthlyCount = () => {
     getSessions().then(sessions => {
@@ -253,7 +256,10 @@ export default function HomeScreen() {
     setPreviewExercise(null)
     setShowExercisesList(false)
     setIsFromStart(false)
-  }, [])
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'exercise-detail') tour.nextStep()
+    }, 200)
+  }, [tour])
 
   const handleCancelPreview = useCallback(() => {
     setPreviewExercise(null)
@@ -300,11 +306,12 @@ export default function HomeScreen() {
   }, [])
 
   const handleStartClick = useCallback(() => {
+    if (tour.currentStep?.id === 'home-start-session') tour.nextStep()
     animateSession(true)
     setShowSession(true)
     setShowExercisesList(true)
     setIsFromStart(true)
-  }, [animateSession])
+  }, [animateSession, tour])
 
   const handleAddExercises = useCallback(() => {
     setShowExercisesList(true)
@@ -378,10 +385,13 @@ export default function HomeScreen() {
         setTimeout(() => {
           setShowSession(false)
           setSavedWorkoutName('')
+          setTimeout(() => {
+            if (tour.currentStep?.id === 'save-session') tour.nextStep()
+          }, 300)
         }, 350)
       })
     }, 1800)
-  }, [animateSession])
+  }, [animateSession, tour])
 
   return (
     <LinearGradient colors={['#111111', '#9a3412', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} locations={[0.45, 0.86, 1]} className="flex-1">
@@ -436,9 +446,9 @@ export default function HomeScreen() {
               <View className="absolute rounded-full" style={{ width: r.scale(56), height: r.scale(56), backgroundColor: 'rgba(249,115,22,0.12)', left: '50%', marginLeft: r.scale(-28), top: '50%', marginTop: r.scale(-28) }} pointerEvents="none" />
               <View className="rounded-2xl w-full" style={{ paddingHorizontal: r.scale(12), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
                 <GreetingUser />
-              </View>
             </View>
-          </Animated.View>
+            </View>
+           </Animated.View>
 
           <Animated.View
             style={{
@@ -455,9 +465,9 @@ export default function HomeScreen() {
               <View className="absolute rounded-full" style={{ width: r.scale(192), height: r.scale(192), backgroundColor: 'rgba(249,115,22,0.045)', left: '50%', marginLeft: r.scale(-96), top: '50%', marginTop: r.scale(-96) }} pointerEvents="none" />
               <View className="absolute rounded-full" style={{ width: r.scale(112), height: r.scale(112), backgroundColor: 'rgba(249,115,22,0.07)', left: '50%', marginLeft: r.scale(-56), top: '50%', marginTop: r.scale(-56) }} pointerEvents="none" />
               <View className="absolute rounded-full" style={{ width: r.scale(56), height: r.scale(56), backgroundColor: 'rgba(249,115,22,0.12)', left: '50%', marginLeft: r.scale(-28), top: '50%', marginTop: r.scale(-28) }} pointerEvents="none" />
-              <View className="border border-orange-500/30 rounded-3xl w-full" style={{ padding: r.scale(20), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
+              <TourTarget id="streak-card" spotlightRadius={24} className="border border-orange-500/30 rounded-3xl w-full" style={{ padding: r.scale(20), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
                 <Streak refreshKey={streakRefreshKey} />
-              </View>
+              </TourTarget>
             </View>
           </Animated.View>
 
@@ -476,29 +486,27 @@ export default function HomeScreen() {
               <View className="absolute rounded-full" style={{ width: r.scale(176), height: r.scale(176), backgroundColor: 'rgba(249,115,22,0.025)', left: '50%', marginLeft: r.scale(-88), top: '50%', marginTop: r.scale(-88) }} pointerEvents="none" />
               <View className="absolute rounded-full" style={{ width: r.scale(96), height: r.scale(96), backgroundColor: 'rgba(249,115,22,0.055)', left: '50%', marginLeft: r.scale(-48), top: '50%', marginTop: r.scale(-48) }} pointerEvents="none" />
               <View className="absolute rounded-full" style={{ width: r.scale(48), height: r.scale(48), backgroundColor: 'rgba(249,115,22,0.1)', left: '50%', marginLeft: r.scale(-24), top: '50%', marginTop: r.scale(-24) }} pointerEvents="none" />
+              <TourTarget id="monthly-count" spotlightRadius={24}>
               <View
                 className="border border-orange-500/30 rounded-3xl items-center justify-center w-full"
                 style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), height: r.scale(128), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: r.scale(12), marginTop: r.scale(12), marginBottom: r.scale(8), marginLeft: r.scale(8) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: r.scale(12), marginTop: r.scale(12), marginBottom: r.scale(8), marginLeft: r.scale(8), marginRight: r.scale(8) }}>
                 <View className="border border-orange-500/50 rounded-full items-center justify-center" style={{ width: r.scale(28), height: r.scale(28) }}>
                   <BicepsFlexed size={r.scale(16)} color="#f97316" fill="#f97316" />
                 </View>
                 <View>
-                  <Text numberOfLines={1} className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(7) }}>WORKOUT IN</Text>
-                  <Text numberOfLines={1} className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(7) }}>THIS MONTH</Text>
+                  <Text className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(6) }}>WORKOUT IN</Text>
+                  <Text className="font-inter text-white/40 tracking-[1px]" style={{ fontSize: r.fontScale(6) }}>THIS MONTH</Text>
                 </View>
               </View>
               <Text className="font-bebas text-orange-500 tracking-[2px]" style={{ fontSize: r.fontScale(48) }}>{monthlyCount}</Text>
               <Text className="font-inter-bold text-white/50 tracking-[1px]" style={{ fontSize: r.fontScale(11), marginTop: r.scale(-12) }}>Days</Text>
             </View>
+            </TourTarget>
             </View>
 
-            <View className="relative" style={{ flex: 0.6 }}>
-              <View
-                className="border border-orange-500/30 rounded-3xl w-full items-start"
-                style={{ paddingHorizontal: r.scale(16), paddingTop: r.scale(12), paddingBottom: r.scale(12), height: r.scale(128), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}
-              >
+            <TourTarget id="pr-section" spotlightRadius={24} className="relative border border-orange-500/30 rounded-3xl w-full items-start" style={{ flex: 0.6, paddingHorizontal: r.scale(16), paddingTop: r.scale(12), paddingBottom: r.scale(12), height: r.scale(128), backgroundColor: 'rgba(10, 10, 10, 0.85)' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: r.scale(4) }}>
                 <PrsBadge size={r.scale(26)} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: r.scale(8) }}>
@@ -522,8 +530,7 @@ export default function HomeScreen() {
                   ))}
                 </ScrollView>
               )}
-            </View>
-            </View>
+            </TourTarget>
           </Animated.View>
 
           <Animated.View
@@ -539,8 +546,9 @@ export default function HomeScreen() {
               <Text className="text-orange-500">TODAY?</Text>
             </Text>
 
-            <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+            <Animated.View style={{ transform: hideFloatAnimation ? [] : [{ translateY: floatY }] }}>
               <View className="items-center justify-center">
+                <TourTarget id="start-session-btn">
                 <TouchableOpacity
                   onPress={handleStartClick}
                   activeOpacity={0.85}
@@ -550,6 +558,7 @@ export default function HomeScreen() {
                   <Zap size={r.scale(24)} color="black" />
                   <Text className="font-bebas tracking-[2px] text-black" style={{ fontSize: r.fontScale(30) }}>Start Session</Text>
                 </TouchableOpacity>
+                </TourTarget>
               </View>
             </Animated.View>
           </Animated.View>

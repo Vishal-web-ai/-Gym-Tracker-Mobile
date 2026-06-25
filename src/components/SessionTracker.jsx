@@ -8,6 +8,8 @@ import AnimatedStaggerCard from './AnimatedStaggerCard'
 import MediaViewer from './MediaViewer'
 import { saveSession, copyToMediaDir } from '../storage'
 import { scale, fontScale } from '../utils/responsive'
+import { TourTarget, useTour } from '../tour'
+import { formatTime } from '../utils/formatTime'
 
 function WeightCell({ value, onChangeText }) {
   return (
@@ -24,6 +26,7 @@ function WeightCell({ value, onChangeText }) {
 }
 
 function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, exerciseWeights, exerciseSets, exerciseNotes, exerciseMedia, setExerciseMedia, setWeight, setReps, setNotes }) {
+  const tour = useTour()
   const [showNameModal, setShowNameModal] = useState(false)
   const [workoutName, setWorkoutName] = useState('')
   const popScale = useRef(new Animated.Value(0)).current
@@ -55,12 +58,6 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
   const [timers, setTimers] = useState({})
   const timerIntervals = useRef({})
   const timerLastClick = useRef({})
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${m}:${s.toString().padStart(2, '0')}`
-  }
 
   const getTimer = (idx) => timers[idx] || { elapsed: 0, running: false, paused: false }
 
@@ -197,18 +194,21 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
       }))
     }
     await saveSession(session)
+    if (tour.currentStep?.id === 'save-session') tour.nextStep()
     if (onSessionSaved) onSessionSaved(workoutName.trim() || 'Workout')
   }
 
   return (
     <View className="flex-1 w-full">
       <View style={{ paddingHorizontal: scale(20), paddingTop: scale(20), paddingBottom: scale(12) }}>
-        <TouchableOpacity onPress={onAddExercises} className="border border-orange-500 rounded-xl" style={{ paddingVertical: scale(12), marginTop: scale(40) }}>
-          <Text className="text-orange-500 text-center font-bebas" style={{ fontSize: fontScale(30) }}>Add Exercises</Text>
-        </TouchableOpacity>
+        <TourTarget id="session-add-exercises-btn">
+          <TouchableOpacity onPress={onAddExercises} className="border border-orange-500 rounded-xl" style={{ paddingVertical: scale(12), marginTop: scale(40) }}>
+            <Text className="text-orange-500 text-center font-bebas" style={{ fontSize: fontScale(30) }}>Add Exercises</Text>
+          </TouchableOpacity>
+        </TourTarget>
       </View>
 
-      <ScrollView className="flex-1" style={{ paddingHorizontal: scale(20) }} showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" style={{ paddingHorizontal: scale(20) }} contentContainerStyle={{ paddingBottom: scale(100) }} showsVerticalScrollIndicator={false}>
         {exercises.length > 0 ? (
           exercises.map((exercise, idx) => (
             <Swipeable key={idx} renderRightActions={(progress, dragX) => {
@@ -228,6 +228,8 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
               <AnimatedStaggerCard index={idx} className="flex-col gap-0 bg-orange-500/10 border border-orange-500/50 rounded-lg relative" style={{ padding: scale(12) }}>
               <View className="flex-row items-center">
                 <Text className="text-orange-400 font-bebas pb-1 flex-1 mr-2" style={{ fontSize: fontScale(24) }} numberOfLines={1}>{exercise.name}</Text>
+                {idx === 0 ? (
+                <TourTarget id="camera-video-buttons">
                 <View className="flex-row items-center border border-orange-500/40 rounded-lg mb-2 flex-shrink-0" style={{ paddingHorizontal: scale(8), paddingVertical: scale(4), gap: scale(12) }}>
                   <TouchableOpacity onPress={() => handleCapturePress(idx, 'photo')}>
                     <Camera size={scale(20)} color="white" />
@@ -239,7 +241,72 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
                     <FileEdit size={scale(17)} color="white" />
                   </TouchableOpacity>
                 </View>
+                </TourTarget>
+                ) : (
+                <View className="flex-row items-center border border-orange-500/40 rounded-lg mb-2 flex-shrink-0" style={{ paddingHorizontal: scale(8), paddingVertical: scale(4), gap: scale(12) }}>
+                  <TouchableOpacity onPress={() => handleCapturePress(idx, 'photo')}>
+                    <Camera size={scale(20)} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleCapturePress(idx, 'video')}>
+                    <Video size={scale(20)} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowNotes(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                    <FileEdit size={scale(17)} color="white" />
+                  </TouchableOpacity>
+                </View>
+                )}
               </View>
+              {idx === 0 ? (
+              <View className="flex-row" style={{ gap: scale(4) }}>
+                <View style={{ flex: 1 }}>
+                  <TourTarget id="reps-weight-inputs">
+                    <View>
+                      <View className="flex-row items-center">
+                        <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Sets</Text>
+                        <View className="flex-row flex-1" style={{ gap: scale(12) }}>
+                          {[0, 1, 2].map(setIdx => {
+                            const mode = exercise.mode || 'weight'
+                            return (
+                              <NumberOfSets
+                                key={setIdx}
+                                reps={exerciseSets[idx]?.[setIdx] || ''}
+                                setReps={(_, val) => setReps(idx, setIdx, val)}
+                                idx={setIdx}
+                                placeholder={mode === 'timer' ? 'T' : 'R'}
+                                mode={mode}
+                              />
+                            )
+                          })}
+                        </View>
+                      </View>
+                      {(exercise.mode || 'weight') === 'weight' && (
+                        <View className="flex-row items-center" style={{ marginTop: scale(8) }}>
+                          <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Weight</Text>
+                          <View className="flex-row flex-1" style={{ gap: scale(12) }}>
+                            {[0, 1, 2].map(setIdx => {
+                              return (
+                                <WeightCell
+                                  key={setIdx}
+                                  value={exerciseWeights[idx]?.[setIdx] || ''}
+                                  onChangeText={(val) => setWeight(idx, setIdx, val)}
+                                />
+                              )
+                            })}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </TourTarget>
+                </View>
+                <View className="justify-center">
+                  <TourTarget id="rest-timer">
+                    <TouchableOpacity onPress={() => handleTimerClick(idx)} className="border border-orange-500/40 bg-orange-500/20 rounded" style={{ paddingHorizontal: scale(12), paddingVertical: scale(4) }}>
+                      <Text className="text-orange-400 font-bebas" style={{ fontSize: fontScale(18) }}>{formatTime(getTimer(idx).elapsed)}</Text>
+                    </TouchableOpacity>
+                  </TourTarget>
+                </View>
+              </View>
+              ) : (
               <View className="flex-row items-center relative">
                 <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Sets</Text>
                 <View className="flex-row flex-1" style={{ gap: scale(12) }}>
@@ -257,11 +324,20 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
                     )
                   })}
                 </View>
+                {idx === 0 ? (
+                <TourTarget id="rest-timer">
                 <TouchableOpacity onPress={() => handleTimerClick(idx)} className="border border-orange-500/40 bg-orange-500/20 rounded mr-2" style={{ paddingHorizontal: scale(12), paddingVertical: scale(4) }}>
                   <Text className="text-orange-400 font-bebas" style={{ fontSize: fontScale(18) }}>{formatTime(getTimer(idx).elapsed)}</Text>
                 </TouchableOpacity>
+                </TourTarget>
+                ) : (
+                <TouchableOpacity onPress={() => handleTimerClick(idx)} className="border border-orange-500/40 bg-orange-500/20 rounded mr-2" style={{ paddingHorizontal: scale(12), paddingVertical: scale(4) }}>
+                  <Text className="text-orange-400 font-bebas" style={{ fontSize: fontScale(18) }}>{formatTime(getTimer(idx).elapsed)}</Text>
+                </TouchableOpacity>
+                )}
               </View>
-              {(exercise.mode || 'weight') === 'weight' && (
+              )}
+              {idx !== 0 && (exercise.mode || 'weight') === 'weight' && (
                 <View className="flex-row items-center">
                   <Text className="text-orange-500/60 font-bebas" style={{ fontSize: fontScale(12), width: scale(48) }}>Weight</Text>
                   <View className="flex-row flex-1" style={{ gap: scale(12) }}>
@@ -290,7 +366,8 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
                   </TouchableOpacity>
                 </View>
               )}
-              {showNotes[idx] && (
+              {showNotes[idx] && (idx === 0 ? (
+                <TourTarget id="notes-section">
                 <TextInput
                   value={exerciseNotes?.[idx] || ''}
                   onChangeText={(val) => setNotes(idx, val)}
@@ -300,7 +377,18 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
                   style={{ fontSize: fontScale(14), paddingHorizontal: scale(12), paddingVertical: scale(8) }}
                   multiline
                 />
-              )}
+                </TourTarget>
+              ) : (
+                <TextInput
+                  value={exerciseNotes?.[idx] || ''}
+                  onChangeText={(val) => setNotes(idx, val)}
+                  placeholder="Notes..."
+                  placeholderTextColor="#737373"
+                  className="bg-neutral-900 text-white border border-orange-500/30 rounded-lg mt-2"
+                  style={{ fontSize: fontScale(14), paddingHorizontal: scale(12), paddingVertical: scale(8) }}
+                  multiline
+                />
+              ))}
 
             </AnimatedStaggerCard>
             </Swipeable>
@@ -310,7 +398,8 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
         )}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: scale(20), paddingBottom: scale(20), paddingTop: scale(12) }}>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: scale(20), paddingBottom: scale(12), paddingTop: scale(12) }}>
+        <TourTarget id="save-session-btn">
         <TouchableOpacity
           onPress={handleSaveClick}
           disabled={exercises.length === 0}
@@ -320,6 +409,7 @@ function SessionTracker({ exercises, onRemove, onAddExercises, onSessionSaved, e
         >
           <Text className="text-black font-bebas" style={{ fontSize: fontScale(30) }}>Save</Text>
         </TouchableOpacity>
+        </TourTarget>
       </View>
 
       {mediaViewer.open && (

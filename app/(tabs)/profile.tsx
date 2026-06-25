@@ -9,6 +9,7 @@ import MediaViewer from '../../src/components/MediaViewer'
 import DeleteConfirmModal from '../../src/components/DeleteConfirmModal'
 import AnimatedStaggerCard from '../../src/components/AnimatedStaggerCard'
 import { useResponsive } from '../../src/utils/responsive'
+import { TourTarget } from '../../src/tour'
 
 function Row({ label, value, editValue, onChangeText, editing, keyboardType, r }: {
   label: string; value: string; editValue: string; onChangeText: (v: string) => void; editing: boolean; keyboardType?: 'default' | 'numeric'; r: ReturnType<typeof useResponsive>
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState(null)
   const focusCount = useRef(0)
   const scrollY = useRef(new Animated.Value(0)).current
+  const [profileHeight, setProfileHeight] = useState(0)
 
   useEffect(() => {
     loadProfile()
@@ -148,105 +150,40 @@ export default function ProfileScreen() {
   return (
     <LinearGradient colors={['#111111', '#9a3412', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} locations={[0.45, 0.86, 1]} className="flex-1">
       <View className="flex-1 pt-12">
-        <Animated.ScrollView
-          className="flex-1 px-5"
-          stickyHeaderIndices={[1]}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-        >
-          <Animated.View style={{
-            opacity: scrollY.interpolate({
-              inputRange: [0, 180],
-              outputRange: [1, 0],
-              extrapolate: 'clamp',
-            }),
-            transform: [{
-              translateY: scrollY.interpolate({
-                inputRange: [0, 180],
-                outputRange: [0, -30],
-                extrapolate: 'clamp',
-              }),
-            }],
-          }}>
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white font-bold" style={{ fontSize: r.fontScale(24) }}>Profile</Text>
-              {editing ? (
-                <View className="flex-row" style={{ gap: r.scale(8) }}>
-                  <TouchableOpacity onPress={cancelEdit} className="border border-orange-500/40 rounded-lg" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8) }}>
-                    <Text className="text-orange-500 font-mono font-bold" style={{ fontSize: r.fontScale(14) }}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={saveEdit} className="bg-orange-500 rounded-lg flex-row items-center" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8), gap: r.scale(4) }}>
-                    <Check size={r.scale(16)} color="black" />
-                    <Text className="text-black font-mono font-bold" style={{ fontSize: r.fontScale(14) }}>Save</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity onPress={startEditing} className="border border-orange-500/40 rounded-lg" style={{ padding: r.scale(8) }}>
-                  <Edit3 size={r.scale(18)} color="#f97316" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity onPress={editing ? handlePhoto : undefined} className="items-center mb-8" disabled={!editing}>
-              {editPhoto && editing ? (
-                <Image source={{ uri: editPhoto }} className="rounded-full border-2 border-orange-500" style={{ width: r.scale(96), height: r.scale(96) }} />
-              ) : photoUri && !editing ? (
-                <Image source={{ uri: photoUri }} className="rounded-full border-2 border-orange-500" style={{ width: r.scale(96), height: r.scale(96) }} />
-              ) : (
-                <View className="rounded-full bg-orange-500/20 border-2 border-orange-500 items-center justify-center" style={{ width: r.scale(96), height: r.scale(96) }}>
-                  <User size={r.scale(48)} color="#f97316" />
-                </View>
-              )}
-              {editing && (
-                <View className="flex-row items-center mt-2" style={{ gap: r.scale(4) }}>
-                  <Camera size={r.scale(14)} color="#f97316" />
-                  <Text className="text-orange-500 font-mono" style={{ fontSize: r.fontScale(14) }}>{editPhoto ? 'Change photo' : 'Add photo'}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <View className="border border-orange-500/50 rounded-2xl mb-6 bg-neutral-900" style={{
-                padding: r.scale(24),
-                shadowColor: '#f97316',
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.4,
-                shadowRadius: 16,
-                elevation: 8,
-              }}
-            >
-            <Row label="Name" value={name} editValue={editName} onChangeText={setEditName} editing={editing} r={r} />
-              <Row label="Age" value={age} editValue={editAge} onChangeText={setEditAge} keyboardType="numeric" editing={editing} r={r} />
-              <Row label="Height" value={height ? `${height} cm` : '—'} editValue={editHeight} onChangeText={setEditHeight} keyboardType="numeric" editing={editing} r={r} />
-              <Row label="Weight" value={weight ? `${weight} kg` : '—'} editValue={editWeight} onChangeText={setEditWeight} keyboardType="numeric" editing={editing} r={r} />
-            </View>
-          </Animated.View>
-
-          {/* Sticky header */}
-          <View className="bg-orange-800 rounded-2xl mb-4 border border-orange-500/50" style={{ padding: r.scale(16), shadowColor: '#f97316', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}>
-            <View className="flex-row justify-between items-center" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8) }}>
-              <Text className="text-white font-bold " style={{ fontSize: r.fontScale(20) }}>Your Gym Memory</Text>
-              <Text className="text-orange-400 font-mono" style={{ fontSize: r.fontScale(14) }}>{media.length} items</Text>
-            </View>
-          </View>
-
-          {/* Gallery */}
-          <View className="pb-6">
-            {media.length === 0 ? (
-              <View className="border border-orange-500/30 rounded-2xl items-center bg-neutral-900/60 mt-4" style={{ padding: r.scale(32) }}>
-                <Film size={r.scale(40)} color="#f97316" style={{ opacity: 0.4 }} />
-                <Text className="text-white/40 font-mono text-center mt-3" style={{ fontSize: r.fontScale(14) }}>
-                  No photos or videos yet. Take a snapshot during your next workout!
-                </Text>
+          <Animated.ScrollView
+            className="flex-1 px-5"
+            stickyHeaderIndices={[0]}
+            contentContainerStyle={{ paddingTop: profileHeight }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+          >
+            {/* Header */}
+            <View className="bg-orange-800 rounded-2xl border border-orange-500/50" style={{ padding: r.scale(16), shadowColor: '#f97316', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}>
+              <View className="flex-row justify-between items-center" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8) }}>
+                <Text className="text-white font-bold " style={{ fontSize: r.fontScale(20) }}>Your Gym Memory</Text>
+                <Text className="text-orange-400 font-mono" style={{ fontSize: r.fontScale(14) }}>{media.length} items</Text>
               </View>
-            ) : (
+            </View>
+
+            {/* Gallery */}
+            <TourTarget id="workout-gallery" style={{ marginTop: r.scale(16) }}>
+            <View style={{ minHeight: r.height - r.scale(60), paddingTop: r.scale(12) }}>
+              {media.length === 0 ? (
+                <View className="border border-orange-500/30 rounded-2xl items-center bg-neutral-900/60" style={{ padding: r.scale(32) }}>
+                  <Film size={r.scale(40)} color="#f97316" style={{ opacity: 0.4 }} />
+                  <Text className="text-white/40 font-mono text-center" style={{ fontSize: r.fontScale(14) }}>
+                    No photos or videos yet. Take a snapshot during your next workout!
+                  </Text>
+                </View>
+              ) : (
               <View className="flex-row flex-wrap mt-4" style={{ marginHorizontal: -4 }}>
                 {media.map((item, index) => {
-                  const size = (r.width - r.scale(40) - 8) / 2
+                  const size = (r.width - r.scale(40) - r.scale(8)) / 2
                   return (
-                    <AnimatedStaggerCard key={`${focusCount.current}-${item.id || index}`} index={index} direction="up" className="" style={{ width: size, height: size, margin: 4 }}>
+                    <AnimatedStaggerCard key={`${focusCount.current}-${item.id || index}`} index={index} className="" style={{ width: size, height: size, margin: r.scale(4) }}>
                       <TouchableOpacity
                         activeOpacity={0.8}
                         onPress={() => {
@@ -272,7 +209,82 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+          </TourTarget>
         </Animated.ScrollView>
+
+        <Animated.View
+          pointerEvents="box-none"
+          onLayout={(e) => { if (!profileHeight) setProfileHeight(e.nativeEvent.layout.height) }}
+          style={{
+            position: 'absolute', top: 0, left: r.scale(20), right: r.scale(20),
+            opacity: scrollY.interpolate({
+              inputRange: [0, 180],
+              outputRange: [1, 0],
+              extrapolate: 'clamp',
+            }),
+            transform: [{
+              translateY: scrollY.interpolate({
+                inputRange: [0, 180],
+                outputRange: [0, -30],
+                extrapolate: 'clamp',
+              }),
+            }],
+          }}
+        >
+          <View className="flex-row justify-between items-center mb-6" style={{ paddingTop: r.scale(48) }}>
+            <Text className="text-white font-bold" style={{ fontSize: r.fontScale(24) }}>Profile</Text>
+            {editing ? (
+              <View className="flex-row" style={{ gap: r.scale(8) }}>
+                <TouchableOpacity onPress={cancelEdit} className="border border-orange-500/40 rounded-lg" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8) }}>
+                  <Text className="text-orange-500 font-mono font-bold" style={{ fontSize: r.fontScale(14) }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={saveEdit} className="bg-orange-500 rounded-lg flex-row items-center" style={{ paddingHorizontal: r.scale(12), paddingVertical: r.scale(8), gap: r.scale(4) }}>
+                  <Check size={r.scale(16)} color="black" />
+                  <Text className="text-black font-mono font-bold" style={{ fontSize: r.fontScale(14) }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={startEditing} className="border border-orange-500/40 rounded-lg" style={{ padding: r.scale(8) }}>
+                <Edit3 size={r.scale(18)} color="#f97316" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity onPress={editing ? handlePhoto : undefined} className="items-center mb-8" disabled={!editing}>
+            {editPhoto && editing ? (
+              <Image source={{ uri: editPhoto }} className="rounded-full border-2 border-orange-500" style={{ width: r.scale(96), height: r.scale(96) }} />
+            ) : photoUri && !editing ? (
+              <Image source={{ uri: photoUri }} className="rounded-full border-2 border-orange-500" style={{ width: r.scale(96), height: r.scale(96) }} />
+            ) : (
+              <View className="rounded-full bg-orange-500/20 border-2 border-orange-500 items-center justify-center" style={{ width: r.scale(96), height: r.scale(96) }}>
+                <User size={r.scale(48)} color="#f97316" />
+              </View>
+            )}
+            {editing && (
+              <View className="flex-row items-center mt-2" style={{ gap: r.scale(4) }}>
+                <Camera size={r.scale(14)} color="#f97316" />
+                <Text className="text-orange-500 font-mono" style={{ fontSize: r.fontScale(14) }}>{editPhoto ? 'Change photo' : 'Add photo'}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TourTarget id="profile-info">
+          <View className="border border-orange-500/50 rounded-2xl mb-6 bg-neutral-900" style={{
+              padding: r.scale(24),
+              shadowColor: '#f97316',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              elevation: 8,
+            }}
+          >
+            <Row label="Name" value={name} editValue={editName} onChangeText={setEditName} editing={editing} r={r} />
+            <Row label="Age" value={age} editValue={editAge} onChangeText={setEditAge} keyboardType="numeric" editing={editing} r={r} />
+            <Row label="Height" value={height ? `${height} cm` : '—'} editValue={editHeight} onChangeText={setEditHeight} keyboardType="numeric" editing={editing} r={r} />
+            <Row label="Weight" value={weight ? `${weight} kg` : '—'} editValue={editWeight} onChangeText={setEditWeight} keyboardType="numeric" editing={editing} r={r} />
+          </View>
+          </TourTarget>
+        </Animated.View>
       </View>
 
       {mediaViewerOpen && (

@@ -1,7 +1,8 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native'
-import { Dumbbell, Target, ArrowLeft } from 'lucide-react-native'
+import { Dumbbell, Target } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getExerciseImage } from './exerciseImages'
+import { TourTarget } from '../tour'
 import { scale, fontScale } from '../utils/responsive'
 
 export default function ExerciseDetail({ exercise, onSelect, onBack }) {
@@ -34,13 +35,14 @@ export default function ExerciseDetail({ exercise, onSelect, onBack }) {
           </View>
 
           <View className="flex-row pt-2" style={{ gap: scale(12) }}>
-            <TouchableOpacity onPress={onBack} className="flex-1 border border-neutral-600 rounded-xl items-center justify-center flex-row" style={{ paddingVertical: scale(12), gap: scale(8) }}>
-              <ArrowLeft size={scale(20)} color="white" />
-              <Text className="text-white font-semibold" style={{ fontSize: fontScale(16) }}>Back</Text>
+            <TouchableOpacity onPress={onBack} className="flex-1 border border-neutral-600 rounded-xl items-center justify-center flex-row" style={{ paddingVertical: scale(12) }}>
+              <Text className="text-white font-bold" style={{ fontSize: fontScale(16) }}>Back</Text>
             </TouchableOpacity>
+            <TourTarget id="exercise-select-btn" style={{ flex: 1 }}>
             <TouchableOpacity onPress={() => onSelect(exercise)} className="flex-1 bg-orange-500 rounded-xl items-center" style={{ paddingVertical: scale(12) }}>
-              <Text className="text-black font-bold" style={{ fontSize: fontScale(18) }}>Select</Text>
+              <Text className="text-black font-bold" style={{ fontSize: fontScale(16) }}>Select</Text>
             </TouchableOpacity>
+            </TourTarget>
           </View>
         </View>
       </View>

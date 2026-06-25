@@ -1,11 +1,11 @@
 import { Dimensions, PixelRatio } from 'react-native'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
-
 const BASE_WIDTH = 390
 const BASE_HEIGHT = 844
 
-const scale = (size) => (SCREEN_WIDTH / BASE_WIDTH) * size
+const getWidth = () => Dimensions.get('window').width
+
+const scale = (size) => (getWidth() / BASE_WIDTH) * size
 
 const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor
 

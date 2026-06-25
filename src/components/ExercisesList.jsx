@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-nativ
 import { Plus, Pencil, Trash2, X, Check } from 'lucide-react-native'
 import { getCustomExercises, saveCustomExercise, updateCustomExercise, deleteCustomExercise } from '../storage'
 import { scale, fontScale } from '../utils/responsive'
+import { TourTarget, useTour } from '../tour'
 
 const CATEGORIES = ['Chest', 'Back', 'Biceps', 'Triceps', 'Arms', 'Shoulders', 'Legs', 'Core', 'Cardio']
 
@@ -147,6 +148,7 @@ const SectionHeader = memo(({ title }) => (
 ))
 
 function ExercisesList({ onSelectExercise, onClose }) {
+  const tour = useTour()
   const [activeTab, setActiveTab] = useState('default')
   const [customExercises, setCustomExercises] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -179,7 +181,10 @@ function ExercisesList({ onSelectExercise, onClose }) {
     }
     resetForm()
     await fetchExercises()
-  }, [editingId, resetForm, fetchExercises])
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'create-exercise-btn') tour.nextStep()
+    }, 200)
+  }, [editingId, resetForm, fetchExercises, tour])
 
   const handleEdit = useCallback((ex) => {
     setEditingId(ex._id)
@@ -192,19 +197,32 @@ function ExercisesList({ onSelectExercise, onClose }) {
     await fetchExercises()
   }, [fetchExercises])
 
-  const handleSelectDefault = useCallback((item) => onSelectExercise(item), [onSelectExercise])
-  const handleSelectCustom = useCallback((item) => onSelectExercise(item), [onSelectExercise])
+  const handleSelectDefault = useCallback((item) => {
+    onSelectExercise(item)
+  }, [onSelectExercise])
+  const handleSelectCustom = useCallback((item) => {
+    onSelectExercise(item)
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'select-exercise') tour.nextStep()
+    }, 200)
+  }, [onSelectExercise, tour])
 
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab)
     if (tab === 'custom') fetchExercises()
-  }, [fetchExercises])
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'my-exercises-tab') tour.nextStep()
+    }, 200)
+  }, [fetchExercises, tour])
 
   const handleShowForm = useCallback(() => {
     setShowForm(true)
     setEditingId(null)
     setFormData(formInitial)
-  }, [])
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'exercise-add') tour.nextStep()
+    }, 200)
+  }, [tour])
 
   const updateFormData = useCallback((key) => (val) => {
     setFormData(prev => ({ ...prev, [key]: val }))
@@ -212,7 +230,10 @@ function ExercisesList({ onSelectExercise, onClose }) {
 
   const updateFormCategory = useCallback((cat) => {
     setFormData(prev => ({ ...prev, category: cat }))
-  }, [])
+    setTimeout(() => {
+      if (tour.currentStep?.id === 'exercise-category') tour.nextStep()
+    }, 200)
+  }, [tour])
 
   const defaultSections = useMemo(() =>
     defaultExercises.map(group => ({
@@ -233,17 +254,31 @@ function ExercisesList({ onSelectExercise, onClose }) {
     <View key={section.title}>
       <SectionHeader title={section.title} />
       {section.data.map((item, i) => (
+        i === 0 ? (
+        <TourTarget key={`${item.name}-${i}`} id="exercise-card-0">
+        <DefaultExerciseItem item={item} onPress={handleSelectDefault} />
+        </TourTarget>
+        ) : (
         <DefaultExerciseItem key={`${item.name}-${i}`} item={item} onPress={handleSelectDefault} />
+        )
       ))}
     </View>
   ), [handleSelectDefault])
 
-  const renderCustomSection = useCallback((section) => (
+  const renderCustomSection = useCallback((section, sectionIndex) => (
     <View key={section.title}>
       <SectionHeader title={section.title} />
-      {section.data.map((item) => (
-        <CustomExerciseItem key={item._id} item={item} onPress={handleSelectCustom} onEdit={handleEdit} onDelete={handleDelete} />
-      ))}
+      {section.data.map((item, i) => {
+        const isFirstOverall = sectionIndex === 0 && i === 0
+        const inner = (
+          <CustomExerciseItem key={item._id} item={item} onPress={handleSelectCustom} onEdit={handleEdit} onDelete={handleDelete} />
+        )
+        return isFirstOverall ? (
+          <TourTarget key={item._id} id="custom-exercise-0">
+            {inner}
+          </TourTarget>
+        ) : inner
+      })}
     </View>
   ), [handleSelectCustom, handleEdit, handleDelete])
 
@@ -253,9 +288,11 @@ function ExercisesList({ onSelectExercise, onClose }) {
         <TouchableOpacity onPress={() => handleTabChange('default')} className={`flex-1 rounded-lg items-center ${activeTab === 'default' ? 'bg-orange-500' : ''}`} style={{ paddingVertical: scale(8) }}>
           <Text numberOfLines={1} className={`font-bebas tracking-[2px] ${activeTab === 'default' ? 'text-black' : 'text-orange-500/50'}`} style={{ fontSize: fontScale(16) }}>Default</Text>
         </TouchableOpacity>
+        <TourTarget id="my-exercises-tab">
         <TouchableOpacity onPress={() => handleTabChange('custom')} className={`flex-1 rounded-lg items-center ${activeTab === 'custom' ? 'bg-orange-500' : ''}`} style={{ paddingVertical: scale(8), paddingHorizontal: scale(12) }}>
           <Text className={`font-bebas tracking-[2px] ${activeTab === 'custom' ? 'text-black' : 'text-orange-500/50'}`} style={{ fontSize: fontScale(15) }}>My Exercises</Text>
         </TouchableOpacity>
+        </TourTarget>
         <TouchableOpacity onPress={onClose} className="bg-orange-500/20 border border-orange-500 rounded-full items-center justify-center ml-5" style={{ width: scale(32), height: scale(32) }}>
           <Text className="text-orange-500 font-bold" style={{ fontSize: fontScale(18) }}>X</Text>
         </TouchableOpacity>
@@ -264,13 +301,18 @@ function ExercisesList({ onSelectExercise, onClose }) {
       {activeTab === 'custom' && (
         <View className="mb-4" style={{ paddingHorizontal: scale(20) }}>
           {!showForm ? (
+            <TourTarget id="add-exercise-btn">
             <TouchableOpacity onPress={handleShowForm} className="flex-row items-center mb-4" style={{ gap: scale(8) }}>
               <Plus size={scale(18)} color="#f97316" />
               <Text className="text-orange-400 font-mono" style={{ fontSize: fontScale(14) }}>Add Exercise</Text>
             </TouchableOpacity>
+            </TourTarget>
           ) : (
             <View className="bg-black/40 border border-orange-500/30 rounded-xl" style={{ padding: scale(16), marginBottom: scale(16) }}>
+              <TourTarget id="exercise-name-input">
               <TextInput value={formData.name} onChangeText={updateFormData('name')} placeholder="Exercise name" placeholderTextColor="#f97316" className="bg-black/50 border border-orange-500/30 rounded-lg text-white font-mono" style={{ paddingHorizontal: scale(12), paddingVertical: scale(8), fontSize: fontScale(14) }} />
+              </TourTarget>
+              <TourTarget id="exercise-category-selector" spotlightRadius={12}>
               <View className="flex-row flex-wrap mt-3" style={{ gap: scale(8) }}>
                 {CATEGORIES.map(cat => (
                   <TouchableOpacity key={cat} onPress={() => updateFormCategory(cat)} className={`rounded-lg ${formData.category === cat ? 'bg-orange-500' : 'bg-black/50 border border-orange-500/30'}`} style={{ paddingHorizontal: scale(12), paddingVertical: scale(6) }}>
@@ -278,7 +320,11 @@ function ExercisesList({ onSelectExercise, onClose }) {
                   </TouchableOpacity>
                 ))}
               </View>
+              </TourTarget>
+              <TourTarget id="exercise-type-selector">
+              <TourTarget id="mode-comparison">
               <View className="flex-row mt-3" style={{ gap: scale(8) }}>
+                <TourTarget id="weight-mode-option">
                 <TouchableOpacity
                   onPress={() => updateFormData('mode')('weight')}
                   className={`flex-1 rounded-lg items-center ${formData.mode === 'weight' ? 'bg-orange-500' : 'bg-black/50 border border-orange-500/30'}`}
@@ -286,6 +332,8 @@ function ExercisesList({ onSelectExercise, onClose }) {
                 >
                   <Text className={`font-bold ${formData.mode === 'weight' ? 'text-black' : 'text-white'}`} style={{ fontSize: fontScale(12) }}>Weight</Text>
                 </TouchableOpacity>
+                </TourTarget>
+                <TourTarget id="timer-mode-option">
                 <TouchableOpacity
                   onPress={() => updateFormData('mode')('timer')}
                   className={`flex-1 rounded-lg items-center ${formData.mode === 'timer' ? 'bg-orange-500' : 'bg-black/50 border border-orange-500/30'}`}
@@ -293,13 +341,18 @@ function ExercisesList({ onSelectExercise, onClose }) {
                 >
                   <Text className={`font-bold ${formData.mode === 'timer' ? 'text-black' : 'text-white'}`} style={{ fontSize: fontScale(12) }}>Timer</Text>
                 </TouchableOpacity>
+                </TourTarget>
               </View>
+              </TourTarget>
+              </TourTarget>
               <TextInput value={formData.muscle} onChangeText={updateFormData('muscle')} placeholder="Target muscle (optional)" placeholderTextColor="#f97316" className="bg-black/50 border border-orange-500/30 rounded-lg text-white font-mono mt-3" style={{ paddingHorizontal: scale(12), paddingVertical: scale(8), fontSize: fontScale(14) }} />
               <View className="flex-row mt-3" style={{ gap: scale(8) }}>
+                <TourTarget id="create-exercise-btn">
                 <TouchableOpacity onPress={handleSave} className="flex-row items-center bg-orange-500 rounded-lg" style={{ gap: scale(4), paddingHorizontal: scale(16), paddingVertical: scale(8) }}>
                   <Check size={scale(16)} color="black" />
                   <Text className="text-black font-bold" style={{ fontSize: fontScale(14) }}>{editingId ? 'Update' : 'Save'}</Text>
                 </TouchableOpacity>
+                </TourTarget>
                 <TouchableOpacity onPress={resetForm} className="flex-row items-center border border-neutral-600 rounded-lg" style={{ gap: scale(4), paddingHorizontal: scale(16), paddingVertical: scale(8) }}>
                   <X size={scale(16)} color="white" />
                   <Text className="text-white" style={{ fontSize: fontScale(14) }}>Cancel</Text>
@@ -332,14 +385,16 @@ function ExercisesList({ onSelectExercise, onClose }) {
     <View className="flex-1 w-full" style={{ marginTop: scale(48) }}>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {listHeader}
+        <TourTarget id="exercise-list">
         <View className="border border-orange-500 rounded-2xl pb-4">
           {activeTab === 'default'
             ? defaultSections.map(renderDefaultSection)
             : customSections.length === 0
               ? listEmpty
-              : customSections.map(renderCustomSection)
+              : customSections.map((section, i) => renderCustomSection(section, i))
           }
         </View>
+        </TourTarget>
       </ScrollView>
     </View>
   )

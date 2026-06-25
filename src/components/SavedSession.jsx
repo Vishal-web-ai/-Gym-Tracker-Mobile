@@ -6,7 +6,7 @@ import MediaViewer from './MediaViewer'
 import AnimatedStaggerCard from './AnimatedStaggerCard'
 import { scale, fontScale } from '../utils/responsive'
 
-export default function SavedSession({ sessions, onDelete, focusCount = 0, onNeedRefresh }) {
+export default function SavedSession({ sessions, onDelete, focusCount = 0, onNeedRefresh, onSessionPress }) {
   const [expandedId, setExpandedId] = useState(null)
   const [notesPopup, setNotesPopup] = useState({ open: false, text: '' })
   const [mediaViewer, setMediaViewer] = useState({ open: false, items: [], index: 0 })
@@ -32,7 +32,10 @@ export default function SavedSession({ sessions, onDelete, focusCount = 0, onNee
     <>
       {sessions.map((session, idx) => (
         <AnimatedStaggerCard key={`${focusCount}-${session._id}`} index={idx} style={{ marginBottom: scale(12) }}>
-          <TouchableOpacity onPress={() => setExpandedId(expandedId === session._id ? null : session._id)} className="bg-orange-700 border border-orange-800 rounded-xl" style={{ padding: scale(16) }}>
+          <TouchableOpacity onPress={() => {
+            setExpandedId(expandedId === session._id ? null : session._id)
+            onSessionPress?.()
+          }} className="bg-orange-700 border border-orange-800 rounded-xl" style={{ padding: scale(16) }}>
             <View className="flex-row items-center justify-between">
               <View className="flex-1" style={{ minWidth: 0 }}>
                 {editingId === session._id ? (

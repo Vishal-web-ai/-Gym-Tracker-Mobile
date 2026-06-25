@@ -1,12 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { View, Text, TextInput, TouchableOpacity } from 'react-native'
 import { scale, fontScale } from '../utils/responsive'
-
-const formatTime = (seconds) => {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
+import { formatTime } from '../utils/formatTime'
 
 export default function NumberOfSets({ reps, setReps, idx, placeholder = 'R', mode = 'weight' }) {
   const [running, setRunning] = useState(false)

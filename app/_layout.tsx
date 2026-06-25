@@ -8,6 +8,7 @@ import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue'
 import { JetBrainsMono_100Thin, JetBrainsMono_200ExtraLight, JetBrainsMono_300Light, JetBrainsMono_400Regular, JetBrainsMono_500Medium, JetBrainsMono_600SemiBold, JetBrainsMono_700Bold, JetBrainsMono_800ExtraBold } from '@expo-google-fonts/jetbrains-mono'
 import '../src/global.css'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { TourProvider, TourOverlay } from '../src/tour'
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -29,12 +30,15 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#050505' }}>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#050505' } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom' }} />
-      </Stack>
+      <TourProvider>
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#050505' } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom' }} />
+        </Stack>
+        <TourOverlay />
+      </TourProvider>
     </GestureHandlerRootView>
   )
 }

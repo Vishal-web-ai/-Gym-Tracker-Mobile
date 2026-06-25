@@ -1,83 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Animated, Easing, Dimensions, Modal } from 'react-native'
-import { Dumbbell, User, Camera, Folder, ChevronRight, ChevronLeft } from 'lucide-react-native'
+import { useState } from 'react'
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Dimensions, Modal } from 'react-native'
+import { User, Camera, Folder, ChevronRight, ChevronLeft } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
+import { useTour } from '../src/tour'
 import * as ImagePicker from 'expo-image-picker'
 import { saveUserProfile, copyToMediaDir } from '../src/storage'
 import { useResponsive } from '../src/utils/responsive'
+import FloatingDumbbell from '../src/components/FloatingDumbbell'
 
 const { width, height } = Dimensions.get('window')
 const W = width as number
 const H = height as number
-
-function FloatingDumbbell({ size, initialX, initialY, speedMultiplier = 1 }: {
-  size: number; initialX: number; initialY: number; speedMultiplier?: number
-}) {
-  const animValue = useRef(new Animated.Value(0)).current
-  const delay = useRef(Math.random() * 3000).current
-  const tx = useRef(40 + Math.random() * 40).current
-  const ty = useRef(40 + Math.random() * 40).current
-  const rot = useRef(10 + Math.random() * 10).current
-  const dirX = useRef(Math.random() > 0.5 ? 1 : -1).current
-  const dirY = useRef(Math.random() > 0.5 ? 1 : -1).current
-  const dirR = useRef(Math.random() > 0.5 ? 1 : -1).current
-  const stableOpacity = useRef(0.3).current
-
-  useEffect(() => {
-    const baseDuration = 10000 + Math.random() * 8000
-    const duration = baseDuration / (speedMultiplier || 1)
-
-    const loop = () => {
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(animValue, {
-            toValue: 1,
-            duration,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(animValue, {
-            toValue: 0,
-            duration,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start(loop)
-    }
-    loop()
-  }, [])
-
-  const translateX = animValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, tx * dirX],
-  })
-  const translateY = animValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, ty * dirY],
-  })
-  const rotate = animValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', `${rot * dirR}deg`],
-  })
-
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: initialX,
-        top: initialY,
-        opacity: stableOpacity,
-        transform: [{ translateX }, { translateY }, { rotate }],
-      }}
-    >
-      <Dumbbell size={size} color="#FF6B1A" strokeWidth={1} />
-    </Animated.View>
-  )
-}
 
 export default function OnboardingScreen() {
   const r = useResponsive()
@@ -89,6 +22,7 @@ export default function OnboardingScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [showPicker, setShowPicker] = useState(false)
   const router = useRouter()
+  const tour = useTour()
 
   const getHeightCm = () => {
     const ft = parseInt(feet) || 0
@@ -121,18 +55,24 @@ export default function OnboardingScreen() {
   const handleSkipPhoto = async () => {
     await saveUserProfile({ age, height: getHeightCm(), weight, joinedAt: new Date().toISOString() })
     router.replace('/(tabs)')
+    setTimeout(() => {
+      if (!tour.isCompleted) tour.startTour()
+    }, 400)
   }
 
   const handleFinish = async () => {
     await saveUserProfile({ age, height: getHeightCm(), weight, photoUri, joinedAt: new Date().toISOString() })
     router.replace('/(tabs)')
+    setTimeout(() => {
+      if (!tour.isCompleted) tour.startTour()
+    }, 400)
   }
 
   const canProceed = () => {
     switch (step) {
       case 0: return age.trim().length > 0
-      case 1: return feet.trim().length > 0
-      case 2: return weight.trim().length > 0
+      case 1: return weight.trim().length > 0
+      case 2: return feet.trim().length > 0
       case 3: return true
       default: return false
     }
@@ -156,6 +96,21 @@ export default function OnboardingScreen() {
           </>
         )
       case 1:
+        return (
+          <>
+            <Text className="text-white font-bold font-mono text-center" style={{ fontSize: r.fontScale(24), marginBottom: r.scale(8) }}>What's your weight?</Text>
+            <TextInput
+              value={weight}
+              onChangeText={setWeight}
+              placeholder="Weight in kg"
+              placeholderTextColor="#666"
+              keyboardType="numeric"
+              className="bg-black/50 border border-orange-500/30 rounded-xl text-white font-mono text-center"
+              style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(18) }}
+            />
+          </>
+        )
+      case 2:
         return (
           <>
             <Text className="text-white font-bold font-mono text-center" style={{ fontSize: r.fontScale(24), marginBottom: r.scale(16) }}>What's your height?</Text>
@@ -185,21 +140,6 @@ export default function OnboardingScreen() {
                 />
               </View>
             </View>
-          </>
-        )
-      case 2:
-        return (
-          <>
-            <Text className="text-white font-bold font-mono text-center" style={{ fontSize: r.fontScale(24), marginBottom: r.scale(8) }}>What's your weight?</Text>
-            <TextInput
-              value={weight}
-              onChangeText={setWeight}
-              placeholder="Weight in kg"
-              placeholderTextColor="#666"
-              keyboardType="numeric"
-              className="bg-black/50 border border-orange-500/30 rounded-xl text-white font-mono text-center"
-              style={{ paddingHorizontal: r.scale(16), paddingVertical: r.scale(12), fontSize: r.fontScale(18) }}
-            />
           </>
         )
       case 3:
